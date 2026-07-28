@@ -1,5 +1,5 @@
 import './App.css'
-import { JanScanner } from './components/JanScanner'
+import { JanScannerPage } from './components/JanScannerPage'
 
 function App() {
   return (
@@ -26,13 +26,13 @@ function App() {
             <span>すぐ読み取り。</span>
           </h1>
           <p>
-            カメラ映像や読み取り結果は保存せず、
+            カメラ映像は保存せず、読み取り履歴だけを
             <br />
-            この端末内だけで処理します。
+            この端末内に保存します。
           </p>
         </section>
 
-        <JanScanner />
+        <JanScannerPage />
       </main>
 
       <footer>

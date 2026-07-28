@@ -12,7 +12,12 @@ type ScannerStatus =
   | 'stopped'
   | 'error'
 
-const DUPLICATE_SUPPRESSION_MS = 2_000
+const DUPLICATE_SUPPRESSION_MS = 3_000
+const DUPLICATE_MESSAGE_MS = 1_800
+
+type JanScannerProps = {
+  onRegister: (janCode: string) => void
+}
 
 function stopVideoTracks(target: HTMLDivElement | null) {
   target?.querySelectorAll('video').forEach((video) => {
@@ -64,10 +69,11 @@ function getCameraErrorMessage(error: unknown): string {
   return 'カメラを開始できませんでした。HTTPSで開いていることと、ブラウザのカメラ設定を確認して、もう一度お試しください。'
 }
 
-export function JanScanner() {
+export function JanScanner({ onRegister }: JanScannerProps) {
   const [status, setStatus] = useState<ScannerStatus>('idle')
   const [janCode, setJanCode] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [duplicateMessage, setDuplicateMessage] = useState<string | null>(null)
 
   const targetRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(false)
@@ -75,39 +81,60 @@ export function JanScanner() {
   const cameraOpenRef = useRef(false)
   const sessionIdRef = useRef(0)
   const stopPromiseRef = useRef<Promise<void>>(Promise.resolve())
+  const duplicateMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  )
   const lastDetectionRef = useRef<{ code: string; detectedAt: number } | null>(
     null,
   )
 
-  const handleDetected = useCallback((result: QuaggaJSResultObject) => {
-    if (!sessionRef.current) {
-      return
-    }
+  const handleDetected = useCallback(
+    function detectedHandler(result: QuaggaJSResultObject) {
+      if (!sessionRef.current) {
+        return
+      }
 
-    const code = result.codeResult?.code
-    if (!code || !isValidJanCode(code)) {
-      return
-    }
+      const code = result.codeResult?.code
+      if (!code || !isValidJanCode(code)) {
+        return
+      }
 
-    const now = Date.now()
-    const lastDetection = lastDetectionRef.current
-    if (
-      lastDetection?.code === code &&
-      now - lastDetection.detectedAt < DUPLICATE_SUPPRESSION_MS
-    ) {
-      return
-    }
+      const now = Date.now()
+      const lastDetection = lastDetectionRef.current
+      if (
+        lastDetection?.code === code &&
+        now - lastDetection.detectedAt < DUPLICATE_SUPPRESSION_MS
+      ) {
+        setDuplicateMessage('同じJANコードのため、重複登録を防止しました。')
+        if (duplicateMessageTimerRef.current === null) {
+          duplicateMessageTimerRef.current = setTimeout(() => {
+            duplicateMessageTimerRef.current = null
+            if (mountedRef.current) {
+              setDuplicateMessage(null)
+            }
+          }, DUPLICATE_MESSAGE_MS)
+        }
+        return
+      }
 
-    lastDetectionRef.current = { code, detectedAt: now }
-    sessionRef.current = false
-    sessionIdRef.current += 1
-    Quagga.offDetected(handleDetected)
-    Quagga.pause()
+      lastDetectionRef.current = { code, detectedAt: now }
+      sessionRef.current = false
+      sessionIdRef.current += 1
+      Quagga.offDetected(detectedHandler)
+      Quagga.pause()
 
-    setJanCode(code)
-    setErrorMessage(null)
-    setStatus('success')
-  }, [])
+      if (duplicateMessageTimerRef.current !== null) {
+        clearTimeout(duplicateMessageTimerRef.current)
+        duplicateMessageTimerRef.current = null
+      }
+      setDuplicateMessage(null)
+      onRegister(code)
+      setJanCode(code)
+      setErrorMessage(null)
+      setStatus('success')
+    },
+    [onRegister],
+  )
 
   const startScanning = useCallback(async () => {
     if (sessionRef.current) {
@@ -213,6 +240,7 @@ export function JanScanner() {
   }, [handleDetected])
 
   useEffect(() => {
+    const target = targetRef.current
     mountedRef.current = true
 
     return () => {
@@ -221,7 +249,10 @@ export function JanScanner() {
       cameraOpenRef.current = false
       sessionIdRef.current += 1
       Quagga.offDetected(handleDetected)
-      void stopQuagga(targetRef.current)
+      if (duplicateMessageTimerRef.current !== null) {
+        clearTimeout(duplicateMessageTimerRef.current)
+      }
+      void stopQuagga(target)
     }
   }, [handleDetected])
 
@@ -311,6 +342,12 @@ export function JanScanner() {
         <div className="error-message" role="alert">
           <span aria-hidden="true">!</span>
           <p>{errorMessage}</p>
+        </div>
+      )}
+
+      {duplicateMessage && (
+        <div className="duplicate-message" role="status" aria-live="polite">
+          {duplicateMessage}
         </div>
       )}
 
