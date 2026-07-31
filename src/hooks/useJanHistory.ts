@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type {
   RegistrationMethod,
+  RestoreMode,
+  RestoreResult,
   ScanHistoryEntry,
   StoredScanHistory,
 } from '../types/history'
+import { restoreHistory } from '../utils/historyTransfer'
 import { isValidJanCode } from '../utils/janCode'
 
 const STORAGE_KEY = 'jan-pocket:scan-history'
@@ -116,6 +119,24 @@ export function useJanHistory() {
     setHistory([])
   }, [])
 
+  const restoreEntries = useCallback(
+    (
+      entries: ScanHistoryEntry[],
+      mode: RestoreMode,
+      validationFailedCount: number,
+    ): RestoreResult => {
+      const result = restoreHistory(
+        history,
+        entries,
+        mode,
+        validationFailedCount,
+      )
+      setHistory(result.history)
+      return result
+    },
+    [history],
+  )
+
   const dismissStorageWarning = useCallback(() => {
     setStorageWarning(null)
   }, [])
@@ -126,6 +147,7 @@ export function useJanHistory() {
     addEntry,
     deleteEntry,
     clearHistory,
+    restoreEntries,
     dismissStorageWarning,
   }
 }

@@ -11,3 +11,15 @@ export type StoredScanHistory = {
   schemaVersion: number
   history: ScanHistoryEntry[]
 }
+
+export type HistoryBackup = StoredScanHistory & {
+  exportedAt: string
+}
+
+export type RestoreMode = 'append' | 'replace'
+
+export type RestoreResult = {
+  history: ScanHistoryEntry[]
+  restoredCount: number
+  failedCount: number
+}

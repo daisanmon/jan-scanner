@@ -1,5 +1,19 @@
 # React + TypeScript + Vite
 
+## Webアプリアイコン
+
+アイコン画像はまだリポジトリに含めていないため、存在しない画像を
+`manifest.webmanifest`や`index.html`から参照していません。用意できたら、次のPNG画像を
+`public/icons/`に保存してください。
+
+- `public/icons/icon-192.png`（192×192）: Web App Manifest用
+- `public/icons/icon-512.png`（512×512）: Web App Manifest用
+- `public/icons/apple-touch-icon.png`（180×180）: iPhoneホーム画面用
+
+追加後は、`manifest.webmanifest`の`icons`に192pxと512pxの相対パスを登録し、
+`index.html`に`apple-touch-icon.png`への相対パスの`link`要素を追加してください。
+GitHub Pagesのサブディレクトリ配信に対応するため、先頭が`/`の絶対パスは使用しません。
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

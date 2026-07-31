@@ -1,0 +1,12 @@
+{
+  "name": "JANスキャナー",
+  "short_name": "JANスキャナー",
+  "description": "カメラでJANコードを読み取り、履歴の保存やバックアップができるJANコードスキャナーです。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#19241f",
+  "background_color": "#edf0e8"
+}

@@ -13,7 +13,7 @@ function App() {
           <span />
         </div>
         <div>
-          <p className="app-name">JAN Pocket</p>
+          <p className="app-name">JANスキャナー</p>
           <p className="app-description">かんたん商品コード読み取り</p>
         </div>
       </header>

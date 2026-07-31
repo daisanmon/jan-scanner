@@ -3,6 +3,7 @@ import { useJanHistory } from '../hooks/useJanHistory'
 import { JanScanner } from './JanScanner'
 import { ManualEntry } from './ManualEntry'
 import { ScanHistory } from './ScanHistory'
+import { HistoryBackup } from './HistoryBackup'
 
 export function JanScannerPage() {
   const {
@@ -11,6 +12,7 @@ export function JanScannerPage() {
     addEntry,
     deleteEntry,
     clearHistory,
+    restoreEntries,
     dismissStorageWarning,
   } = useJanHistory()
 
@@ -41,6 +43,7 @@ export function JanScannerPage() {
 
       <JanScanner onRegister={handleCameraRegister} />
       <ManualEntry onRegister={handleManualRegister} />
+      <HistoryBackup history={history} onRestore={restoreEntries} />
       <ScanHistory
         history={history}
         onDelete={deleteEntry}

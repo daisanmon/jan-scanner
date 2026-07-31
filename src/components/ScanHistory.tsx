@@ -16,6 +16,11 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
   second: '2-digit',
 })
 
+const methodLabels = {
+  camera: 'カメラ',
+  manual: '手入力',
+} as const
+
 export function ScanHistory({ history, onDelete, onClear }: ScanHistoryProps) {
   const handleClear = () => {
     if (window.confirm('読み取り履歴をすべて削除しますか？')) {
@@ -53,7 +58,7 @@ export function ScanHistory({ history, onDelete, onClear }: ScanHistoryProps) {
                     {dateTimeFormatter.format(new Date(entry.readAt))}
                   </time>
                   <span className={`method-badge method-badge--${entry.method}`}>
-                    {entry.method}
+                    {methodLabels[entry.method]}
                   </span>
                 </div>
               </div>

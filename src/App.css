@@ -6,8 +6,10 @@
   width: min(100%, 31rem);
   min-height: 100svh;
   margin: 0 auto;
-  padding: max(1.25rem, env(safe-area-inset-top)) 1rem
-    max(1.5rem, env(safe-area-inset-bottom));
+  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
 }
 
 .app-header {
@@ -588,6 +590,152 @@ footer p {
   touch-action: manipulation;
 }
 
+.backup-actions,
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.restore-mode {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+  padding: 0;
+  border: 0;
+}
+
+.restore-mode legend {
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.restore-mode label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.restore-mode input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--olive);
+}
+
+.backup-import-button {
+  width: 100%;
+}
+
+.backup-note {
+  margin: 0.55rem 0 0;
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.operation-message {
+  margin: 0.8rem 0 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.85rem;
+  color: #34622d;
+  background: #eaf5e8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.operation-message--error,
+.replace-warning {
+  color: #87392f;
+  background: #fff0ed;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.confirm-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  background: rgba(10, 18, 15, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.restore-confirm {
+  width: min(100%, 29rem);
+  max-height: calc(100svh - 2rem);
+  overflow-y: auto;
+  margin: 0 auto;
+  padding: 1.1rem;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 25px 70px rgba(10, 18, 15, 0.35);
+}
+
+.restore-confirm h3 {
+  margin: 0.3rem 0 1rem;
+  color: var(--ink);
+  font-size: 1.15rem;
+}
+
+.restore-confirm dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.restore-confirm dl > div {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.restore-confirm dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.restore-confirm dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.replace-warning {
+  margin: 0.85rem 0 0;
+  padding: 0.7rem;
+  border-radius: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.confirm-actions {
+  margin-top: 1rem;
+}
+
 .text-button {
   padding: 0.55rem 0.7rem;
   color: var(--muted);
@@ -749,7 +897,8 @@ footer p + p::before {
 
 @media (max-width: 350px) {
   .app-shell {
-    padding-inline: 0.7rem;
+    padding-right: max(0.7rem, env(safe-area-inset-right));
+    padding-left: max(0.7rem, env(safe-area-inset-left));
   }
 
   .scanner-card {
@@ -761,6 +910,10 @@ footer p + p::before {
   }
 
   .manual-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-actions {
     grid-template-columns: 1fr;
   }
 
