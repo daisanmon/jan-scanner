@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jan-scanner-poizon-api",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-08-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "POIZON_GATEWAY",
+        "class_name": "PoizonGateway"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PoizonGateway"]
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://daisanmon.github.io",
+    "TURNSTILE_EXPECTED_HOSTNAME": "daisanmon.github.io",
+    "TURNSTILE_EXPECTED_ACTION": "poizon_lookup",
+    "POIZON_REGION": "JP",
+    "POIZON_CURRENCY": "JPY",
+    "POIZON_BIDDING_TYPE": "25",
+    "POIZON_LANGUAGE": "ja",
+    "POIZON_TIME_ZONE": "Asia/Tokyo"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

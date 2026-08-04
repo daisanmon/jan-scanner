@@ -11,6 +11,7 @@ iPhoneなどのブラウザからJANコードを読み取り、端末内に履�
 - カメラによるJANコードの読み取り（EAN-13／EAN-8）
 - 読み取ったコードの桁数とチェックデジットの検証
 - 8桁または13桁のJANコードの手入力と検証
+- JAN登録後のPOIZON商品・サイズ・参考価格照会（バックエンド設定後に有効）
 - 読み取り履歴の保存（カメラ／手入力の登録方法を表示）
 - 日本語・日本時間（Asia/Tokyo）での読み取り日時表示
 - 履歴の個別削除と全件削除
@@ -51,7 +52,7 @@ Safariで公開URLを開き、次の順に操作します。
 
 履歴はブラウザの`localStorage`に保存されます。保存キーは`jan-pocket:scan-history`で、スキーマバージョンと履歴の配列を持つJSON形式です。各履歴にはID、JANコード、ISO形式の読み取り日時、登録方法（`camera`または`manual`）が含まれます。
 
-アプリのコードには、履歴をサーバー、GitHub、外部APIへ送信する処理はありません。ただし、「JSONを書き出す」「CSVを書き出す」を押した後に共有先を選んだ場合は、そのファイルが選択した共有先へ渡されます。
+履歴はサーバーやGitHubへ同期されません。POIZON連携を有効にした場合、登録したJANコードは商品・参考価格照会のためCloudflare Worker経由でPOIZON Open Platform APIへ送信されます。履歴のJSON/CSVを書き出した後に共有先を選んだ場合は、そのファイルが選択した共有先へ渡されます。
 
 - 履歴は別端末へ自動同期されません。
 - ブラウザやURLが異なると、保存領域も異なります。
@@ -78,6 +79,9 @@ Safariで公開URLを開き、次の順に操作します。
 - localStorage
 - GitHub Actions
 - GitHub Pages
+- Cloudflare Workers / SQLite-backed Durable Objects
+- Cloudflare Turnstile
+- POIZON Open Platform API（API ID 181、93）
 
 ## ローカル開発
 
@@ -92,14 +96,38 @@ npm.cmd run dev
 
 Viteの開発サーバーが表示したURLをブラウザで開いてください。このREADMEでは、PowerShellの実行ポリシーによって`npm`を直接実行できない環境も考慮し、`npm.cmd`を使用しています。
 
+POIZONバックエンドをローカル起動する場合は、`.dev.vars.example`を`.dev.vars`へコピーして開発用の値を設定し、別のターミナルで次を実行します。`.dev.vars`はGit管理対象外です。
+
+```powershell
+npm.cmd run dev:worker
+```
+
+フロントエンドの公開接続先とTurnstile site keyは`src/config/publicConfig.ts`で管理します。初期状態は無効です。App Secret、Turnstile secret key、その他の秘密情報をこのファイル、`VITE_`環境変数、ブラウザ、GitHubへ置かないでください。
+
 ## ビルドとLint
 
 ```powershell
+npm.cmd run typecheck
+npm.cmd test
 npm.cmd run build
 npm.cmd run lint
 ```
 
-ビルド成果物は`dist/`に作成されます。
+フロントエンドの成果物は`dist/`、Workerのドライラン成果物は`dist-worker/`に作成されます。テストには署名、API 181/93の正規化と呼び出し順序、キャッシュ、Turnstile検証、確認済み実データの画面表示が含まれます。
+
+## POIZONバックエンドの設定とデプロイ
+
+バックエンドはCloudflare Workers Free、SQLite-backed Durable Object、`workers.dev`を前提としています。署名と秘密情報はWorker内だけで扱います。デプロイ前にCloudflare Turnstileで`daisanmon.github.io`を許可したウィジェットを作成してください。
+
+```powershell
+npx.cmd wrangler login
+npx.cmd wrangler secret put POIZON_APP_KEY
+npx.cmd wrangler secret put POIZON_APP_SECRET
+npx.cmd wrangler secret put TURNSTILE_SECRET_KEY
+npm.cmd run deploy:worker
+```
+
+デプロイ後、発行された`https://...workers.dev` URLと公開Turnstile site keyを`src/config/publicConfig.ts`へ設定し、`enabled`を`true`にします。秘密値は`wrangler.jsonc`やGitHubへ追加しません。Workerの詳細な入出力と運用設定は`worker/README.md`を参照してください。
 
 ## GitHub Pagesへの公開
 
@@ -131,8 +159,8 @@ git push
 
 ## 現在の制限事項
 
-- 商品名の自動取得は行いません。
-- 商品情報の外部データベースや外部APIとは連携していません。
+- POIZON連携はCloudflare Worker、Turnstile、POIZON Open Platformの設定完了後に利用できます。
+- 参考価格はPOIZON APIが返す取得時点の値で、販売価格や買取価格を保証するものではありません。
 - 複数端末間の履歴同期はありません。
 - Service Workerは実装されておらず、オフライン動作は保証されません。
 - 履歴は端末・ブラウザ・URLごとの保存領域に分かれます。

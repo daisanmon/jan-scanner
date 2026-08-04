@@ -573,6 +573,184 @@ footer p {
   line-height: 1.5;
 }
 
+.poizon-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.poizon-card .feature-heading {
+  margin-bottom: 0;
+}
+
+.poizon-jan,
+.poizon-message,
+.poizon-product p,
+.poizon-as-of,
+.poizon-error p {
+  margin: 0;
+}
+
+.poizon-jan {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.poizon-message,
+.poizon-error {
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  color: var(--muted);
+  background: #f3f5f1;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.6;
+}
+
+.poizon-message--warning,
+.poizon-error {
+  color: #87392f;
+  background: #fff0ed;
+}
+
+.poizon-error {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.poizon-product {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.poizon-product-title {
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.poizon-brand,
+.poizon-size {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.poizon-size {
+  color: var(--olive);
+}
+
+.poizon-identifiers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0.55rem 0 0;
+}
+
+.poizon-identifiers > div {
+  min-width: 0;
+  padding: 0.55rem;
+  border-radius: 0.65rem;
+  background: #f5f6f3;
+}
+
+.poizon-identifiers dt {
+  color: var(--muted);
+  font-size: 0.55rem;
+  font-weight: 700;
+}
+
+.poizon-identifiers dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.poizon-prices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.poizon-prices > div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.75rem;
+  border-radius: 0.85rem;
+  color: #fff;
+  background: var(--ink);
+}
+
+.poizon-prices span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.poizon-prices strong {
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.poizon-as-of {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.58rem;
+  text-align: right;
+}
+
+.poizon-candidates {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.poizon-candidates button {
+  display: grid;
+  width: 100%;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid #d9ded5;
+  border-radius: 0.8rem;
+  color: var(--ink);
+  background: #fafbf8;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.poizon-candidates button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.poizon-candidates span {
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.poizon-candidates strong {
+  color: var(--olive);
+  font-size: 0.68rem;
+}
+
+.poizon-challenge {
+  min-height: 4rem;
+  overflow: hidden;
+}
+
+.turnstile-widget {
+  min-height: 4rem;
+}
+
 .history-heading {
   margin-bottom: 0.7rem;
 }
