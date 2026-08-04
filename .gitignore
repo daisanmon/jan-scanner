@@ -12,6 +12,8 @@ dist
 dist-ssr
 dist-worker
 .wrangler
+.local-tools/
+.local-runtime/
 .dev.vars
 .dev.vars.*
 !.dev.vars.example

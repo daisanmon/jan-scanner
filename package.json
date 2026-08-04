@@ -6,6 +6,11 @@
   "scripts": {
     "dev": "vite",
     "dev:worker": "wrangler dev",
+    "configure:ngrok-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-ngrok.ps1",
+    "configure:poizon-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/configure-local-poizon.ps1",
+    "start:poizon-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-poizon.ps1",
+    "status:poizon-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/status-local-poizon.ps1",
+    "stop:poizon-local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-local-poizon.ps1",
     "typecheck": "tsc -b && tsc -p tsconfig.worker.json",
     "test": "vitest run",
     "test:watch": "vitest",

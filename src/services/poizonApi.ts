@@ -50,7 +50,10 @@ export async function lookupPoizon(
   const endpoint = new URL('/v1/poizon/lookups', POIZON_PUBLIC_CONFIG.apiBaseUrl)
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': '1',
+    },
     body: JSON.stringify(input),
     signal,
   })

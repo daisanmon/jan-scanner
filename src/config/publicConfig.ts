@@ -1,6 +1,6 @@
 export const POIZON_PUBLIC_CONFIG = {
   enabled: true,
-  apiBaseUrl: 'https://jan-scanner-poizon-api.daisanmon-jan-scanner.workers.dev',
+  apiBaseUrl: 'https://sprite-rehire-undercook.ngrok-free.dev',
   turnstileSiteKey: '0x4AAAAAAEF-AtidcEXDe8AA',
 } as const
 

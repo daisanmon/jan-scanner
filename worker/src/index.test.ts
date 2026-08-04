@@ -109,4 +109,25 @@ describe('public Worker API', () => {
     expect(turnstileMock).not.toHaveBeenCalled()
     expect(gatewayFetch).not.toHaveBeenCalled()
   })
+
+  it('allows the ngrok browser-warning bypass header in preflight requests', async () => {
+    const { env } = createEnv()
+    const response = await worker.fetch(
+      new Request('https://worker.example/v1/poizon/lookups', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://daisanmon.github.io',
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers':
+            'content-type, ngrok-skip-browser-warning',
+        },
+      }),
+      env,
+    )
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('Access-Control-Allow-Headers')).toBe(
+      'Content-Type, ngrok-skip-browser-warning',
+    )
+  })
 })
