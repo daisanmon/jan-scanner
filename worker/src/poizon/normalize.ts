@@ -40,7 +40,7 @@ function normalizeSizes(sku: Record<string, unknown>) {
     }
   }
 
-  const preferredOrder = ['JP', 'EU', 'US Men']
+  const preferredOrder = ['JP', 'EU', 'US', 'US Men']
   return Array.from(sizes, ([system, value]) => ({ system, value })).sort((left, right) => {
     const leftIndex = preferredOrder.indexOf(left.system)
     const rightIndex = preferredOrder.indexOf(right.system)
@@ -75,7 +75,15 @@ export function normalizeBarcodeCandidates(
     }
 
     for (const rawSku of skuList) {
-      if (!isRecord(rawSku) || stringValue(rawSku.barCode) !== janCode) {
+      if (!isRecord(rawSku)) {
+        continue
+      }
+      const rawBarcode = rawSku.barCode
+      if (rawBarcode !== undefined && rawBarcode !== null && typeof rawBarcode !== 'string') {
+        continue
+      }
+      const returnedBarcode = typeof rawBarcode === 'string' ? rawBarcode.trim() : ''
+      if (returnedBarcode && returnedBarcode !== janCode) {
         continue
       }
       const skuId = stringId(rawSku.skuId)

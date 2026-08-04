@@ -23,6 +23,60 @@ describe('POIZON response normalization', () => {
     ])
   })
 
+  it('accepts a matching API 181 result when POIZON leaves barCode empty', () => {
+    expect(
+      normalizeBarcodeCandidates(
+        {
+          code: 200,
+          data: {
+            contents: [
+              {
+                spuId: 1045489,
+                globalSpuId: 10001045489,
+                spuInfo: {
+                  title: 'Maison MIHARA YASUHIRO Og Sole Peterson Low Canvas Black',
+                  brandName: 'MIHARA YASUHIRO',
+                },
+                skuInfoList: [
+                  {
+                    barCode: null,
+                    skuId: 600297001,
+                    globalSkuId: 10600297001,
+                    regionSalePvInfoList: [
+                      {
+                        sizeInfos: [
+                          { sizeKey: 'JP', value: '28.5' },
+                          { sizeKey: 'EU', value: '45' },
+                          { sizeKey: 'US', value: '11.5' },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        '4580563378953',
+      ),
+    ).toEqual([
+      {
+        spuId: '1045489',
+        globalSpuId: '10001045489',
+        title: 'Maison MIHARA YASUHIRO Og Sole Peterson Low Canvas Black',
+        brandName: 'MIHARA YASUHIRO',
+        skuId: '600297001',
+        globalSkuId: '10600297001',
+        janCode: '4580563378953',
+        sizes: [
+          { system: 'JP', value: '28.5' },
+          { system: 'EU', value: '45' },
+          { system: 'US', value: '11.5' },
+        ],
+      },
+    ])
+  })
+
   it('normalizes the confirmed API 93 prices', () => {
     expect(
       normalizePrice({

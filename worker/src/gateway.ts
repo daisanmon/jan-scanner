@@ -16,6 +16,7 @@ const PRODUCT_TTL_MS = 24 * 60 * 60 * 1_000
 const NEGATIVE_PRODUCT_TTL_MS = 10 * 60 * 1_000
 const PRICE_TTL_MS = 2 * 60 * 1_000
 const MINIMUM_UPSTREAM_INTERVAL_MS = 250
+const PRODUCT_CACHE_NAMESPACE = 'product:v2'
 
 const QUOTA_WINDOWS = {
   minute: { durationMs: 60 * 1_000, limit: 240 },
@@ -162,7 +163,7 @@ export class PoizonGateway implements DurableObject {
   }
 
   private async getProducts(janCode: string, requestId: string) {
-    const cacheKey = `product:${janCode}`
+    const cacheKey = `${PRODUCT_CACHE_NAMESPACE}:${janCode}`
     const cached = await this.readCache<PoizonProductCandidate[]>(cacheKey)
     if (cached) {
       return { candidates: cached, cacheHit: true }
