@@ -11,7 +11,7 @@ iPhoneなどのブラウザからJANコードを読み取り、端末内に履�
 - カメラによるJANコードの読み取り（EAN-13／EAN-8）
 - 読み取ったコードの桁数とチェックデジットの検証
 - 8桁または13桁のJANコードの手入力と検証
-- JAN登録後のPOIZON商品・サイズ・参考価格照会（バックエンド設定後に有効）
+- JAN登録後のPOIZON商品・全サイズ・参考価格・過去30日販売統計照会（バックエンド設定後に有効）
 - 読み取り履歴の保存（カメラ／手入力の登録方法を表示）
 - 日本語・日本時間（Asia/Tokyo）での読み取り日時表示
 - 履歴の個別削除と全件削除
@@ -52,7 +52,7 @@ Safariで公開URLを開き、次の順に操作します。
 
 履歴はブラウザの`localStorage`に保存されます。保存キーは`jan-pocket:scan-history`で、スキーマバージョンと履歴の配列を持つJSON形式です。各履歴にはID、JANコード、ISO形式の読み取り日時、登録方法（`camera`または`manual`）が含まれます。
 
-履歴はサーバーやGitHubへ同期されません。POIZON連携を有効にした場合、登録したJANコードは商品・参考価格照会のためCloudflare Worker経由でPOIZON Open Platform APIへ送信されます。履歴のJSON/CSVを書き出した後に共有先を選んだ場合は、そのファイルが選択した共有先へ渡されます。
+履歴はサーバーやGitHubへ同期されません。POIZON連携を有効にした場合、登録したJANコードは商品・全サイズ・価格・販売統計照会のためCloudflare Worker経由でPOIZON Open Platform APIへ送信されます。履歴のJSON/CSVを書き出した後に共有先を選んだ場合は、そのファイルが選択した共有先へ渡されます。
 
 - 履歴は別端末へ自動同期されません。
 - ブラウザやURLが異なると、保存領域も異なります。
@@ -81,7 +81,7 @@ Safariで公開URLを開き、次の順に操作します。
 - GitHub Pages
 - Cloudflare Workers / SQLite-backed Durable Objects
 - Cloudflare Turnstile
-- POIZON Open Platform API（API ID 181、93）
+- POIZON Open Platform API（API ID 181、169、141。API 93は障害時の単一サイズフォールバック）
 
 ## ローカル開発
 
@@ -113,7 +113,7 @@ npm.cmd run build
 npm.cmd run lint
 ```
 
-フロントエンドの成果物は`dist/`、Workerのドライラン成果物は`dist-worker/`に作成されます。テストには署名、API 181/93の正規化と呼び出し順序、キャッシュ、Turnstile検証、確認済み実データの画面表示が含まれます。
+フロントエンドの成果物は`dist/`、Workerのドライラン成果物は`dist-worker/`に作成されます。テストにはネストされた署名、API 181/169/141/93の正規化と呼び出し順序、集計、キャッシュ、Turnstile検証、全サイズ市場データの画面表示が含まれます。
 
 ## POIZONバックエンドの設定とデプロイ
 
@@ -160,7 +160,8 @@ git push
 ## 現在の制限事項
 
 - POIZON連携はCloudflare Worker、Turnstile、POIZON Open Platformの設定完了後に利用できます。
-- 参考価格はPOIZON APIが返す取得時点の値で、販売価格や買取価格を保証するものではありません。
+- 参考価格と販売統計はPOIZON APIが返す取得時点の値で、販売価格、買取価格、将来の販売数を保証するものではありません。
+- 画面の「中国市場・過去30日販売数」はOpen Platformの`globalSoldNum30`を使用しています。セラー画面との実データ照合済みですが、POIZON上の正式な市場範囲はサポートへ確認中です。
 - 複数端末間の履歴同期はありません。
 - Service Workerは実装されておらず、オフライン動作は保証されません。
 - 履歴は端末・ブラウザ・URLごとの保存領域に分かれます。

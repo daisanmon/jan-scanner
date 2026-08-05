@@ -25,4 +25,15 @@ describe('POIZON request signature', () => {
       'C5D8D9F1A3241A0DEAD4F2755CE7D286',
     )
   })
+
+  it('serializes nested API 169 statistics options as JSON before form encoding', () => {
+    expect(
+      createSignatureBase({
+        spuIds: [1174899],
+        statisticsDataQry: { salesEnable: true, minPriceEnable: true },
+      }),
+    ).toBe(
+      'spuIds=1174899&statisticsDataQry=%7B%22salesEnable%22%3Atrue%2C%22minPriceEnable%22%3Atrue%7D',
+    )
+  })
 })

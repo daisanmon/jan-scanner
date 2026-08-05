@@ -1,11 +1,19 @@
 import type { WorkerEnv } from '../env'
 import { PoizonUpstreamError } from '../errors'
-import { normalizeBarcodeCandidates, normalizePrice, readPoizonEnvelope } from './normalize'
+import {
+  normalizeBarcodeCandidates,
+  normalizeBatchPrices,
+  normalizeMarketProduct,
+  normalizePrice,
+  readPoizonEnvelope,
+} from './normalize'
 import { signPoizonRequest, type SignableParameters } from './signature'
 
 const POIZON_ORIGIN = 'https://open.poizon.com'
 const API_181_PATH = '/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-barcodes'
+const API_169_PATH = '/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-spu'
 const API_93_PATH = '/dop/api/v1/pop/api/v1/recommend-bid/price'
+const API_141_PATH = '/dop/api/v1/pop/api/v1/recommend-bid/batchPrice'
 const REQUEST_TIMEOUT_MS = 5_000
 
 export type QuotaReservation = () => Promise<void>
@@ -31,7 +39,7 @@ function retryDelay(): Promise<void> {
 }
 
 async function requestPoizon(
-  apiId: 181 | 93,
+  apiId: 181 | 169 | 93 | 141,
   path: string,
   businessParameters: SignableParameters,
   env: WorkerEnv,
@@ -108,6 +116,67 @@ async function requestPoizon(
   throw new PoizonUpstreamError('unavailable', apiId)
 }
 
+export async function queryMarketBySpu(
+  spuId: string,
+  env: WorkerEnv,
+  reserveQuota: QuotaReservation,
+  fetcher: Fetcher = fetch,
+) {
+  const response = await requestPoizon(
+    169,
+    API_169_PATH,
+    {
+      spuIds: [Number(spuId)],
+      sellerStatusEnable: false,
+      buyStatusEnable: false,
+      statisticsDataQry: {
+        salesEnable: true,
+        minPriceEnable: true,
+      },
+      region: env.POIZON_REGION,
+    },
+    env,
+    reserveQuota,
+    fetcher,
+  )
+  try {
+    return normalizeMarketProduct(response, spuId)
+  } catch {
+    const envelope = readPoizonEnvelope(response)
+    throw new PoizonUpstreamError('bad_response', 169, 200, envelope.code, envelope.traceId)
+  }
+}
+
+export async function queryBatchPrices(
+  skuIds: string[],
+  env: WorkerEnv,
+  reserveQuota: QuotaReservation,
+  fetcher: Fetcher = fetch,
+) {
+  if (skuIds.length === 0 || skuIds.length > 20) {
+    throw new RangeError('API 141 accepts between 1 and 20 SKU IDs')
+  }
+  const response = await requestPoizon(
+    141,
+    API_141_PATH,
+    {
+      skuIds: skuIds.map(Number),
+      biddingType: Number(env.POIZON_BIDDING_TYPE),
+      region: env.POIZON_REGION,
+      currency: env.POIZON_CURRENCY,
+    },
+    env,
+    reserveQuota,
+    fetcher,
+  )
+  try {
+    return normalizeBatchPrices(response)
+  } catch {
+    const envelope = readPoizonEnvelope(response)
+    throw new PoizonUpstreamError('bad_response', 141, 200, envelope.code, envelope.traceId)
+  }
+}
+
 export async function queryProductsByBarcode(
   janCode: string,
   env: WorkerEnv,
@@ -159,5 +228,7 @@ export async function queryConsignmentPrice(
 
 export const POIZON_API_PATHS = {
   181: API_181_PATH,
+  169: API_169_PATH,
   93: API_93_PATH,
+  141: API_141_PATH,
 } as const

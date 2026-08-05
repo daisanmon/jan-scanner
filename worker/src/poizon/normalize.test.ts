@@ -1,8 +1,17 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest'
-import { barcodeFixture } from '../../test/poizonFixtures'
-import { normalizeBarcodeCandidates, normalizePrice } from './normalize'
+import {
+  barcodeFixture,
+  batchPriceFixture,
+  marketFixture,
+} from '../../test/poizonFixtures'
+import {
+  normalizeBarcodeCandidates,
+  normalizeBatchPrices,
+  normalizeMarketProduct,
+  normalizePrice,
+} from './normalize'
 
 describe('POIZON response normalization', () => {
   it('keeps only an exact JAN match and preserves large IDs as strings', () => {
@@ -90,5 +99,43 @@ describe('POIZON response normalization', () => {
     expect(
       normalizePrice({ code: 200, data: { globalMinPrice: 33_900 } }),
     ).toBeNull()
+  })
+
+  it('normalizes API 169 sizes, sales, ratios, and average prices', () => {
+    const market = normalizeMarketProduct(marketFixture, '1045489')
+
+    expect(market).toMatchObject({
+      spuId: '1045489',
+      globalSpuId: '10001045489',
+      title: 'Test sneaker',
+      brandName: 'Test brand',
+    })
+    expect(market.skus[0]).toEqual({
+      skuId: '600297001',
+      globalSkuId: '10600297001',
+      sizes: [
+        { system: 'JP', value: '28.5' },
+        { system: 'EU', value: '45' },
+        { system: 'US Men', value: '11.5' },
+      ],
+      globalSoldNum30: 200,
+      localSoldNum30: 2,
+      globalMonthToMonthRatio: 0.25,
+      localMonthToMonthRatio: -0.5,
+      averageTransactionPrice: 33_000,
+    })
+    expect(market.skus[2]).toMatchObject({
+      globalSoldNum30: null,
+      localSoldNum30: null,
+      averageTransactionPrice: null,
+    })
+  })
+
+  it('normalizes an unordered API 141 batch and preserves missing prices', () => {
+    expect(normalizeBatchPrices(batchPriceFixture)).toEqual([
+      { skuId: '600297002', globalMinPrice: 35_900, asiaMinPrice: 34_900 },
+      { skuId: '600297001', globalMinPrice: 33_900, asiaMinPrice: 33_900 },
+      { skuId: '600297003', globalMinPrice: 37_900, asiaMinPrice: null },
+    ])
   })
 })

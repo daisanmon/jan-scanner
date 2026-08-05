@@ -1,4 +1,4 @@
-import type { PoizonProductCandidate } from '../../../shared/poizon'
+import type { PoizonProductCandidate, PoizonSize } from '../../../shared/poizon'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -18,7 +18,39 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function normalizeSizes(sku: Record<string, unknown>) {
+function integerValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return value
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number(value)
+    return Number.isSafeInteger(parsed) ? parsed : null
+  }
+  return null
+}
+
+function positiveInteger(value: unknown): number | null {
+  const parsed = integerValue(value)
+  return parsed !== null && parsed > 0 ? parsed : null
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function nestedInteger(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key]
+  if (!isRecord(value)) {
+    return integerValue(value)
+  }
+  return integerValue(value.minUnitVal) ?? integerValue(value.amount)
+}
+
+function normalizeSizes(sku: Record<string, unknown>): PoizonSize[] {
   const sizes = new Map<string, string>()
   const regionProperties = Array.isArray(sku.regionSalePvInfoList)
     ? sku.regionSalePvInfoList
@@ -40,7 +72,7 @@ function normalizeSizes(sku: Record<string, unknown>) {
     }
   }
 
-  const preferredOrder = ['JP', 'EU', 'US', 'US Men']
+  const preferredOrder = ['JP', 'EU', 'US', 'US Men', 'US Women', 'UK', 'CN', 'KR']
   return Array.from(sizes, ([system, value]) => ({ system, value })).sort((left, right) => {
     const leftIndex = preferredOrder.indexOf(left.system)
     const rightIndex = preferredOrder.indexOf(right.system)
@@ -108,15 +140,96 @@ export function normalizeBarcodeCandidates(
   return Array.from(candidates.values())
 }
 
+export type NormalizedMarketSku = {
+  skuId: string
+  globalSkuId: string
+  sizes: PoizonSize[]
+  globalSoldNum30: number | null
+  localSoldNum30: number | null
+  globalMonthToMonthRatio: number | null
+  localMonthToMonthRatio: number | null
+  averageTransactionPrice: number | null
+}
+
+export type NormalizedMarketProduct = {
+  spuId: string
+  globalSpuId?: string
+  title: string
+  brandName: string
+  skus: NormalizedMarketSku[]
+}
+
+export function normalizeMarketProduct(
+  response: unknown,
+  expectedSpuId: string,
+): NormalizedMarketProduct {
+  if (!isRecord(response) || Number(response.code) !== 200 || !Array.isArray(response.data)) {
+    throw new Error('Invalid API 169 response')
+  }
+
+  const rawProduct = response.data.find((value) => {
+    if (!isRecord(value)) {
+      return false
+    }
+    const spuInfo = isRecord(value.spuInfo) ? value.spuInfo : {}
+    return stringId(value.spuId ?? spuInfo.spuId) === expectedSpuId
+  })
+  if (!isRecord(rawProduct)) {
+    throw new Error('API 169 did not return the requested SPU')
+  }
+
+  const spuInfo = isRecord(rawProduct.spuInfo) ? rawProduct.spuInfo : {}
+  const spuId = stringId(rawProduct.spuId ?? spuInfo.spuId)
+  const globalSpuId = stringId(rawProduct.globalSpuId ?? spuInfo.globalSpuId)
+  if (!spuId) {
+    throw new Error('API 169 returned an invalid SPU ID')
+  }
+
+  const rawSkus = Array.isArray(rawProduct.skuInfoList) ? rawProduct.skuInfoList : []
+  const skus: NormalizedMarketSku[] = []
+  for (const rawSku of rawSkus) {
+    if (!isRecord(rawSku)) {
+      continue
+    }
+    const skuId = stringId(rawSku.skuId)
+    const globalSkuId = stringId(rawSku.globalSkuId)
+    if (!skuId || !globalSkuId) {
+      continue
+    }
+    const sales = isRecord(rawSku.commoditySales) ? rawSku.commoditySales : {}
+    const averagePrice = isRecord(rawSku.averagePrice) ? rawSku.averagePrice : {}
+    const averageTransactionPrice = nestedInteger(averagePrice, 'globalAveragePrice')
+
+    skus.push({
+      skuId,
+      globalSkuId,
+      sizes: normalizeSizes(rawSku),
+      globalSoldNum30: integerValue(sales.globalSoldNum30),
+      localSoldNum30: integerValue(sales.localSoldNum30),
+      globalMonthToMonthRatio: finiteNumber(sales.globalMonthToMonthRatio),
+      localMonthToMonthRatio: finiteNumber(sales.localMonthToMonthRatio),
+      averageTransactionPrice:
+        averageTransactionPrice !== null && averageTransactionPrice > 0
+          ? averageTransactionPrice
+          : null,
+    })
+  }
+  if (skus.length === 0) {
+    throw new Error('API 169 returned no valid SKUs')
+  }
+
+  return {
+    spuId,
+    ...(globalSpuId ? { globalSpuId } : {}),
+    title: stringValue(spuInfo.title),
+    brandName: stringValue(spuInfo.brandName),
+    skus,
+  }
+}
+
 export type NormalizedPrice = {
   globalMinPrice: number
   asiaMinPrice: number
-}
-
-function nonNegativeInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : null
 }
 
 export function normalizePrice(response: unknown): NormalizedPrice | null {
@@ -124,13 +237,42 @@ export function normalizePrice(response: unknown): NormalizedPrice | null {
     throw new Error('Invalid API 93 response')
   }
 
-  const globalMinPrice = nonNegativeInteger(response.data.globalMinPrice)
-  const asiaMinPrice = nonNegativeInteger(response.data.asiaMinPrice)
+  const globalMinPrice = integerValue(response.data.globalMinPrice)
+  const asiaMinPrice = integerValue(response.data.asiaMinPrice)
   if (globalMinPrice === null || asiaMinPrice === null) {
     return null
   }
 
   return { globalMinPrice, asiaMinPrice }
+}
+
+export type NormalizedBatchPrice = {
+  skuId: string
+  globalMinPrice: number | null
+  asiaMinPrice: number | null
+}
+
+export function normalizeBatchPrices(response: unknown): NormalizedBatchPrice[] {
+  if (!isRecord(response) || Number(response.code) !== 200 || !Array.isArray(response.data)) {
+    throw new Error('Invalid API 141 response')
+  }
+
+  const prices = new Map<string, NormalizedBatchPrice>()
+  for (const rawPrice of response.data) {
+    if (!isRecord(rawPrice)) {
+      continue
+    }
+    const skuId = stringId(rawPrice.skuId)
+    if (!skuId) {
+      continue
+    }
+    prices.set(skuId, {
+      skuId,
+      globalMinPrice: positiveInteger(rawPrice.globalMinPrice),
+      asiaMinPrice: positiveInteger(rawPrice.asiaMinPrice),
+    })
+  }
+  return Array.from(prices.values())
 }
 
 export function readPoizonEnvelope(response: unknown): {
