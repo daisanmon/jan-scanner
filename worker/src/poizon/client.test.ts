@@ -1,11 +1,17 @@
 // @vitest-environment node
 
 import { describe, expect, it, vi } from 'vitest'
-import { barcodeFixture } from '../../test/poizonFixtures'
+import {
+  barcodeFixture,
+  batchPriceFixture,
+  marketFixture,
+} from '../../test/poizonFixtures'
 import type { WorkerEnv } from '../env'
 import {
   POIZON_API_PATHS,
+  queryBatchPrices,
   queryConsignmentPrice,
+  queryMarketBySpu,
   queryProductsByBarcode,
 } from './client'
 
@@ -20,20 +26,31 @@ const env = {
 } as WorkerEnv
 
 describe('POIZON API client', () => {
-  it('calls API 181 before API 93 with the consignment parameters', async () => {
+  it('calls APIs 181, 169, and 141 with documented parameters', async () => {
     const events: string[] = []
     const bodies: Array<Record<string, unknown>> = []
     const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input)
-      events.push(url.endsWith(POIZON_API_PATHS[181]) ? '181' : '93')
+      const apiId = url.endsWith(POIZON_API_PATHS[181])
+        ? '181'
+        : url.endsWith(POIZON_API_PATHS[169])
+          ? '169'
+          : url.endsWith(POIZON_API_PATHS[141])
+            ? '141'
+            : '93'
+      events.push(apiId)
       bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>)
       return Response.json(
-        url.endsWith(POIZON_API_PATHS[181])
+        apiId === '181'
           ? barcodeFixture
-          : {
-              code: 200,
-              data: { globalMinPrice: 33_900, asiaMinPrice: 33_900 },
-            },
+          : apiId === '169'
+            ? marketFixture
+            : apiId === '141'
+              ? batchPriceFixture
+              : {
+                  code: 200,
+                  data: { globalMinPrice: 33_900, asiaMinPrice: 33_900 },
+                },
       )
     }) as typeof fetch
     const reserveQuota = vi.fn(async () => {
@@ -46,14 +63,20 @@ describe('POIZON API client', () => {
       reserveQuota,
       fetcher,
     )
-    const price = await queryConsignmentPrice(
-      candidates[0].skuId,
+    const market = await queryMarketBySpu(
+      candidates[0].spuId,
+      env,
+      reserveQuota,
+      fetcher,
+    )
+    const prices = await queryBatchPrices(
+      market.skus.map((sku) => sku.skuId),
       env,
       reserveQuota,
       fetcher,
     )
 
-    expect(events).toEqual(['reserve', '181', 'reserve', '93'])
+    expect(events).toEqual(['reserve', '181', 'reserve', '169', 'reserve', '141'])
     expect(bodies[0]).toMatchObject({
       barcodes: ['4580563378953'],
       pageNum: 1,
@@ -61,13 +84,33 @@ describe('POIZON API client', () => {
       app_key: 'app-key',
     })
     expect(bodies[1]).toMatchObject({
-      skuId: 600297001,
+      spuIds: [1045489],
+      sellerStatusEnable: false,
+      buyStatusEnable: false,
+      statisticsDataQry: { salesEnable: true, minPriceEnable: true },
+      region: 'JP',
+    })
+    expect(bodies[2]).toMatchObject({
+      skuIds: [600297001, 600297002, 600297003],
       biddingType: 25,
       region: 'JP',
       currency: 'JPY',
     })
-    expect(bodies[1]).not.toHaveProperty('saleType')
+    expect(bodies[2]).not.toHaveProperty('saleType')
     expect(bodies[0]).not.toHaveProperty('app-secret')
-    expect(price).toEqual({ globalMinPrice: 33_900, asiaMinPrice: 33_900 })
+    expect(prices).toHaveLength(3)
+  })
+
+  it('keeps API 93 available for the single-size compatibility fallback', async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        code: 200,
+        data: { globalMinPrice: 33_900, asiaMinPrice: 33_900 },
+      }),
+    ) as typeof fetch
+
+    await expect(
+      queryConsignmentPrice('600297001', env, vi.fn(), fetcher),
+    ).resolves.toEqual({ globalMinPrice: 33_900, asiaMinPrice: 33_900 })
   })
 })

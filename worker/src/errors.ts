@@ -24,14 +24,14 @@ export class ApiError extends Error {
 
 export class PoizonUpstreamError extends Error {
   readonly kind: 'configuration' | 'bad_response' | 'unavailable'
-  readonly apiId: 181 | 93
+  readonly apiId: 181 | 169 | 93 | 141
   readonly httpStatus?: number
   readonly poizonCode?: string
   readonly traceId?: string
 
   constructor(
     kind: 'configuration' | 'bad_response' | 'unavailable',
-    apiId: 181 | 93,
+    apiId: 181 | 169 | 93 | 141,
     httpStatus?: number,
     poizonCode?: string,
     traceId?: string,

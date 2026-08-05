@@ -15,7 +15,7 @@ describe('lookupPoizon', () => {
         return Response.json({
           requestId: 'request-id',
           state: 'not_found',
-          cache: { product: false, price: false },
+          cache: { product: false, market: false, price: false },
         })
       },
     )
@@ -23,6 +23,7 @@ describe('lookupPoizon', () => {
 
     await lookupPoizon({
       janCode: '4580563378953',
+      selectedSpuId: '1045489',
       turnstileToken: 'browser-token',
     })
 
@@ -30,6 +31,9 @@ describe('lookupPoizon', () => {
     expect(init.headers).toMatchObject({
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': '1',
+    })
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      selectedSpuId: '1045489',
     })
   })
 })

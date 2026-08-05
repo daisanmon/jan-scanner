@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto'
 
-export type SignableValue = string | number | boolean | SignableValue[] | null | undefined
+export type SignableObject = { [key: string]: SignableValue }
+export type SignableValue =
+  | string
+  | number
+  | boolean
+  | SignableValue[]
+  | SignableObject
+  | null
+  | undefined
 export type SignableParameters = Record<string, SignableValue>
 
 function isEmpty(value: SignableValue): boolean {
@@ -8,13 +16,18 @@ function isEmpty(value: SignableValue): boolean {
     value === undefined ||
     value === null ||
     value === '' ||
-    (Array.isArray(value) && value.length === 0)
+    (Array.isArray(value) && value.length === 0) ||
+    (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0)
   )
 }
 
 function serializeValue(value: Exclude<SignableValue, null | undefined>): string {
   if (Array.isArray(value)) {
     return value.map((item) => serializeValue(item as Exclude<SignableValue, null | undefined>)).join(',')
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
   }
 
   return String(value)

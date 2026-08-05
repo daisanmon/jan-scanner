@@ -8,7 +8,7 @@ import { validateTurnstile } from './turnstile'
 export { PoizonGateway } from './gateway'
 
 const MAX_REQUEST_BYTES = 4_096
-const SKU_ID_PATTERN = /^\d{1,16}$/
+const POIZON_ID_PATTERN = /^\d{1,16}$/
 
 function allowedOrigins(env: WorkerEnv): Set<string> {
   return new Set(
@@ -93,18 +93,26 @@ async function parseLookupRequest(request: Request): Promise<LookupRequest> {
     throw new ApiError(400, 'INVALID_REQUEST', 'ブラウザ確認トークンが必要です。', false)
   }
 
-  if (record.selectedSkuId !== undefined) {
+  for (const selection of [record.selectedSpuId, record.selectedSkuId]) {
+    if (selection === undefined) {
+      continue
+    }
     if (
-      typeof record.selectedSkuId !== 'string' ||
-      !SKU_ID_PATTERN.test(record.selectedSkuId) ||
-      !Number.isSafeInteger(Number(record.selectedSkuId))
+      typeof selection !== 'string' ||
+      !POIZON_ID_PATTERN.test(selection) ||
+      !Number.isSafeInteger(Number(selection))
     ) {
       throw new ApiError(400, 'INVALID_SELECTION', '商品候補の指定が正しくありません。', false)
     }
   }
 
+  if (record.selectedSpuId !== undefined && record.selectedSkuId !== undefined) {
+    throw new ApiError(400, 'INVALID_SELECTION', '商品候補は1つだけ指定してください。', false)
+  }
+
   return {
     janCode: record.janCode,
+    selectedSpuId: record.selectedSpuId as string | undefined,
     selectedSkuId: record.selectedSkuId as string | undefined,
     turnstileToken: record.turnstileToken,
   }
@@ -140,6 +148,7 @@ async function handleRequest(
   const gatewayInput: GatewayLookupRequest = {
     requestId,
     janCode: input.janCode,
+    selectedSpuId: input.selectedSpuId,
     selectedSkuId: input.selectedSkuId,
   }
   const id = env.POIZON_GATEWAY.idFromName('poizon-global-gateway')

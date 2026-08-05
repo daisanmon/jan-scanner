@@ -3,6 +3,8 @@ import { ApiError } from './errors'
 
 export type LookupRequest = {
   janCode: string
+  selectedSpuId?: string
+  /** Accepted during the frontend/worker rollout for backwards compatibility. */
   selectedSkuId?: string
   turnstileToken: string
 }

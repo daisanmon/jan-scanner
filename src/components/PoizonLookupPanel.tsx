@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isPoizonPublicConfigReady, POIZON_PUBLIC_CONFIG } from '../config/publicConfig'
 import { usePoizonLookup } from '../hooks/usePoizonLookup'
-import type { PoizonProductCandidate } from '../types/poizon'
+import type {
+  PoizonMarketData,
+  PoizonProductCandidate,
+  PoizonSize,
+  PoizonSizeMarketData,
+} from '../types/poizon'
 import { TurnstileWidget } from './TurnstileWidget'
 
 export type PoizonLookupTarget = {
@@ -19,13 +24,41 @@ const yenFormatter = new Intl.NumberFormat('ja-JP', {
   maximumFractionDigits: 0,
 })
 
-function displaySize(candidate: PoizonProductCandidate): string {
-  if (candidate.sizes.length === 0) {
+const numberFormatter = new Intl.NumberFormat('ja-JP', {
+  maximumFractionDigits: 1,
+})
+
+const percentFormatter = new Intl.NumberFormat('ja-JP', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+  signDisplay: 'always',
+})
+
+function displaySizes(sizes: PoizonSize[]): string {
+  if (sizes.length === 0) {
     return 'サイズ情報なし'
   }
-  return candidate.sizes
-    .map(({ system, value }) => `${system === 'US Men' ? 'US' : system} ${value}`)
+  const hasWomenSize = sizes.some(({ system }) => system === 'US Women')
+  return sizes
+    .map(({ system, value }) => {
+      const label = system === 'US Men'
+        ? hasWomenSize ? 'US M' : 'US'
+        : system === 'US Women' ? 'US W' : system
+      return `${label} ${value}`
+    })
     .join(' / ')
+}
+
+function formatPrice(value: number | null): string {
+  return value === null ? '—' : yenFormatter.format(value)
+}
+
+function formatNumber(value: number | null): string {
+  return value === null ? '—' : numberFormatter.format(value)
+}
+
+function formatRatio(value: number | null): string {
+  return value === null ? '—' : percentFormatter.format(value)
 }
 
 function ProductSummary({ product }: { product: PoizonProductCandidate }) {
@@ -33,13 +66,170 @@ function ProductSummary({ product }: { product: PoizonProductCandidate }) {
     <div className="poizon-product">
       <p className="poizon-product-title">{product.title || `SPU ${product.spuId}`}</p>
       {product.brandName && <p className="poizon-brand">{product.brandName}</p>}
-      <p className="poizon-size">{displaySize(product)}</p>
+      <p className="poizon-size">JAN照会サイズ: {displaySizes(product.sizes)}</p>
       <dl className="poizon-identifiers">
         <div><dt>spuId</dt><dd>{product.spuId}</dd></div>
         <div><dt>skuId</dt><dd>{product.skuId}</dd></div>
         <div><dt>globalSkuId</dt><dd>{product.globalSkuId}</dd></div>
       </dl>
     </div>
+  )
+}
+
+function RangeMetric({
+  label,
+  min,
+  median,
+  max,
+  formatter,
+}: {
+  label: string
+  min: number | null
+  median: number | null
+  max: number | null
+  formatter: (value: number | null) => string
+}) {
+  return (
+    <section className="poizon-range" aria-label={label}>
+      <h3>{label}</h3>
+      <dl>
+        <div><dt>最小</dt><dd>{formatter(min)}</dd></div>
+        <div className="poizon-range-median"><dt>中央値</dt><dd>{formatter(median)}</dd></div>
+        <div><dt>最大</dt><dd>{formatter(max)}</dd></div>
+      </dl>
+    </section>
+  )
+}
+
+function SizeMarketRow({ size }: { size: PoizonSizeMarketData }) {
+  return (
+    <li className={size.scanned ? 'poizon-size-row poizon-size-row--scanned' : 'poizon-size-row'}>
+      <div className="poizon-size-row-heading">
+        <strong>{displaySizes(size.sizes)}</strong>
+        {size.scanned && <span>スキャンしたサイズ</span>}
+      </div>
+      <dl className="poizon-size-metrics">
+        <div>
+          <dt>仕入れ基準価格</dt>
+          <dd>{formatPrice(size.asiaMinPrice)}</dd>
+        </div>
+        <div>
+          <dt>30日販売数</dt>
+          <dd>{formatNumber(size.globalSoldNum30)}</dd>
+        </div>
+        <div>
+          <dt>30日平均成約価格</dt>
+          <dd>{formatPrice(size.averageTransactionPrice)}</dd>
+        </div>
+        <div>
+          <dt>前月比</dt>
+          <dd>{formatRatio(size.globalMonthToMonthRatio)}</dd>
+        </div>
+      </dl>
+      <p className="poizon-size-row-meta">
+        skuId {size.skuId}
+        {size.globalMinPrice !== null && size.globalMinPrice !== size.asiaMinPrice
+          ? ` / グローバル参考 ${formatPrice(size.globalMinPrice)}`
+          : ''}
+      </p>
+    </li>
+  )
+}
+
+function MarketView({ market }: { market: PoizonMarketData }) {
+  const { summary } = market
+  const bestSelling = market.sizes.find(
+    (size) => size.skuId === summary.bestSellingSkuId,
+  )
+  const timestamp = market.priceDataAsOf ?? market.marketDataAsOf
+
+  return (
+    <div className="poizon-market">
+      <div className="poizon-market-primary">
+        <div>
+          <span>中国市場・過去30日販売数</span>
+          <strong>{formatNumber(summary.globalSoldNum30Total)}</strong>
+          <small>
+            {summary.salesPerSize.reportedSizeCount}/{summary.salesPerSize.totalSizeCount}サイズ集計・API表記: Global
+          </small>
+        </div>
+        <div>
+          <span>仕入れ基準価格・中央値</span>
+          <strong>{formatPrice(summary.referencePrice.median)}</strong>
+          <small>{summary.referencePrice.reportedSizeCount}/{summary.referencePrice.totalSizeCount}サイズ</small>
+        </div>
+      </div>
+
+      <RangeMetric
+        label="仕入れ基準価格"
+        min={summary.referencePrice.min}
+        median={summary.referencePrice.median}
+        max={summary.referencePrice.max}
+        formatter={formatPrice}
+      />
+      <RangeMetric
+        label="サイズ別・過去30日販売数"
+        min={summary.salesPerSize.min}
+        median={summary.salesPerSize.median}
+        max={summary.salesPerSize.max}
+        formatter={formatNumber}
+      />
+
+      <dl className="poizon-market-secondary">
+        <div>
+          <dt>販売数加重・30日平均成約価格</dt>
+          <dd>{formatPrice(summary.salesWeightedAveragePrice)}</dd>
+        </div>
+        <div>
+          <dt>最も売れたサイズ</dt>
+          <dd>
+            {bestSelling
+              ? `${displaySizes(bestSelling.sizes)}・${formatNumber(bestSelling.globalSoldNum30)}`
+              : '—'}
+          </dd>
+        </div>
+      </dl>
+
+      {market.warnings.length > 0 && (
+        <p className="poizon-message poizon-message--warning">
+          一部サイズの価格または販売統計を取得できなかったため、集計できた範囲を表示しています。
+        </p>
+      )}
+
+      <details className="poizon-size-details">
+        <summary>全サイズの価格・販売数を見る（{market.sizes.length}）</summary>
+        <ul className="poizon-size-list">
+          {market.sizes.map((size) => (
+            <SizeMarketRow key={size.skuId} size={size} />
+          ))}
+        </ul>
+      </details>
+
+      <p className="poizon-as-of">
+        取得時刻: {new Date(timestamp).toLocaleString('ja-JP')}
+      </p>
+    </div>
+  )
+}
+
+function LegacyPriceView({
+  price,
+}: {
+  price: { globalMinPrice: number; asiaMinPrice: number; dataAsOf: string }
+}) {
+  return (
+    <>
+      <p className="poizon-message poizon-message--warning">
+        全サイズの市場統計を取得できなかったため、スキャンしたサイズの参考価格を表示しています。
+      </p>
+      <div className="poizon-prices">
+        <div><span>グローバル参考価格</span><strong>{yenFormatter.format(price.globalMinPrice)}</strong></div>
+        <div><span>アジア参考価格</span><strong>{yenFormatter.format(price.asiaMinPrice)}</strong></div>
+      </div>
+      <p className="poizon-as-of">
+        取得時刻: {new Date(price.dataAsOf).toLocaleString('ja-JP')}
+      </p>
+    </>
   )
 }
 
@@ -58,7 +248,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
   }, [])
 
   const runLookup = useCallback(
-    async (selectedSkuId?: string) => {
+    async (selectedSpuId?: string) => {
       if (!target || !token) {
         return
       }
@@ -66,7 +256,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       setToken(null)
       const response = await lookup({
         janCode: target.janCode,
-        selectedSkuId,
+        selectedSpuId,
         turnstileToken: currentToken,
       })
       if (!response || response.state === 'selection_required') {
@@ -101,7 +291,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       </p>
     )
   } else if (!target) {
-    content = <p className="poizon-message">JANコードを読み取ると商品と参考価格を照会します。</p>
+    content = <p className="poizon-message">JANコードを読み取ると商品と市場データを照会します。</p>
   } else if (state.status === 'idle') {
     content = <p className="poizon-message">ブラウザ確認が完了するまでお待ちください。</p>
   } else if (state.status === 'loading') {
@@ -127,17 +317,17 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
   } else if (state.response.state === 'selection_required') {
     content = (
       <div>
-        <p className="poizon-message">候補が複数あります。サイズを選択してください。</p>
+        <p className="poizon-message">候補が複数あります。商品型番を選択してください。</p>
         <ul className="poizon-candidates">
           {state.response.candidates.map((candidate) => (
-            <li key={candidate.skuId}>
+            <li key={candidate.spuId}>
               <button
                 type="button"
                 disabled={!token}
-                onClick={() => void runLookup(candidate.skuId)}
+                onClick={() => void runLookup(candidate.spuId)}
               >
                 <span>{candidate.title || `SPU ${candidate.spuId}`}</span>
-                <strong>{displaySize(candidate)}</strong>
+                <strong>SPU {candidate.spuId}・{displaySizes(candidate.sizes)}</strong>
               </button>
             </li>
           ))}
@@ -148,8 +338,9 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
     content = (
       <div>
         <ProductSummary product={state.response.product} />
+        {state.response.market && <MarketView market={state.response.market} />}
         <p className="poizon-message poizon-message--warning">
-          商品は見つかりましたが、現在は参考価格を取得できません。
+          商品は見つかりましたが、スキャンしたサイズの参考価格を取得できません。
         </p>
       </div>
     )
@@ -157,13 +348,9 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
     content = (
       <div>
         <ProductSummary product={state.response.product} />
-        <div className="poizon-prices">
-          <div><span>グローバル参考価格</span><strong>{yenFormatter.format(state.response.price.globalMinPrice)}</strong></div>
-          <div><span>アジア参考価格</span><strong>{yenFormatter.format(state.response.price.asiaMinPrice)}</strong></div>
-        </div>
-        <p className="poizon-as-of">
-          取得時刻: {new Date(state.response.price.dataAsOf).toLocaleString('ja-JP')}
-        </p>
+        {state.response.market
+          ? <MarketView market={state.response.market} />
+          : <LegacyPriceView price={state.response.price} />}
       </div>
     )
   }
@@ -173,7 +360,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       <div className="feature-heading">
         <div>
           <p className="eyebrow">POIZON</p>
-          <h2 id="poizon-heading">商品・参考価格</h2>
+          <h2 id="poizon-heading">商品・市場データ</h2>
         </div>
       </div>
       {target && <p className="poizon-jan">JAN {target.janCode}</p>}

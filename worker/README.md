@@ -11,21 +11,23 @@ GitHub Pages上のフロントエンドとPOIZON Open Platformの間に置くClo
 ```json
 {
   "janCode": "4580563378953",
-  "selectedSkuId": "600297001",
+  "selectedSpuId": "1045489",
   "turnstileToken": "browser-token"
 }
 ```
 
-`selectedSkuId`はAPI 181が複数候補を返した後だけ指定します。処理順序は、JANの厳密検証、Turnstile検証、API 181、候補の確定、API 93です。API 93は`region=JP`、`currency=JPY`、`biddingType=25`を使い、`saleType`は送りません。
+`selectedSpuId`はAPI 181が複数の異なる商品型番を返した後だけ指定します。同一SPUの複数サイズは自動的に1商品へまとめます。旧フロントエンドとの短期的な互換性のため`selectedSkuId`も受理しますが、新規実装では使用しません。
+
+通常の処理順序は、JANの厳密検証、Turnstile検証、API 181、SPUの確定、API 169、API 141です。API 169で全サイズと販売統計を取得し、API 141で最大20 SKUずつ参考価格を取得します。API 141は`region=JP`、`currency=JPY`、`biddingType=25`を使い、`saleType`は送りません。API 169が失敗した場合だけ、従来のAPI 93でスキャンしたサイズの価格を取得します。
 
 成功応答の`state`は次のいずれかです。
 
-- `resolved`: `product`と`price`を返す
-- `selection_required`: `candidates`を返し、サイズ選択を求める
+- `resolved`: `product`、互換用`price`、取得できた場合は`market`を返す
+- `selection_required`: SPU単位の`candidates`を返し、商品型番の選択を求める
 - `not_found`: JANと完全一致するSKUがない
 - `price_unavailable`: 商品は確定したが、必要な参考価格が揃っていない
 
-IDは桁落ちを避けるため文字列、価格はJPYの整数です。エラーはHTTPステータスと`error.code`、`retryable`、`requestId`を返します。
+`market`には全サイズ、サイズ別の`globalSoldNum30`、30日平均成約価格、参考価格、前月比と、最小・中央値・最大・合計・販売数加重平均の集計が含まれます。取得できない値は`0`へ置換せず`null`にします。IDは桁落ちを避けるため文字列、価格はJPYの整数です。エラーはHTTPステータスと`error.code`、`retryable`、`requestId`を返します。
 
 ## 秘密情報
 
@@ -41,9 +43,11 @@ npx.cmd wrangler secret put TURNSTILE_SECRET_KEY
 
 ## 署名と外部API
 
-POIZONの非空パラメータへ`app_key`とミリ秒`timestamp`を加え、キーをASCII順に並べ、UTF-8のform URL encoding（空白は`+`）を行います。配列はカンマ区切りです。連結した文字列の末尾へ区切りなしでApp Secretを付け、MD5の大文字16進数を`sign`として送ります。署名元文字列、署名値、secretはログへ出しません。
+POIZONの非空パラメータへ`app_key`とミリ秒`timestamp`を加え、キーをASCII順に並べ、UTF-8のform URL encoding（空白は`+`）を行います。配列はカンマ区切り、API 169の`statisticsDataQry`などのオブジェクトは送信時と同じJSON文字列へ直列化します。連結した文字列の末尾へ区切りなしでApp Secretを付け、MD5の大文字16進数を`sign`として送ります。署名元文字列、署名値、secretはログへ出しません。
 
 - API 181: `/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-barcodes`
+- API 169: `/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-spu`
+- API 141: `/dop/api/v1/pop/api/v1/recommend-bid/batchPrice`
 - API 93: `/dop/api/v1/pop/api/v1/recommend-bid/price`
 
 各上流リクエストは5秒でタイムアウトし、ネットワークエラー、429、5xxだけをジッター付きで1回再試行します。
@@ -54,7 +58,9 @@ POIZONの非空パラメータへ`app_key`とミリ秒`timestamp`を加え、キ
 
 - 商品結果: 24時間
 - 該当なし: 10分
-- 参考価格: 2分（古い価格へのフォールバックなし）
+- 全サイズ・販売統計: 15分
+- バッチ参考価格: 2分（古い価格へのフォールバックなし）
+- API 93フォールバック価格: 2分
 - 最小呼び出し間隔: 250ms
 - 上限: 240回/分、8,000回/時、18,000回/日
 

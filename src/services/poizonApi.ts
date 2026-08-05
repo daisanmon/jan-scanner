@@ -6,7 +6,7 @@ import type {
 
 export type PoizonLookupInput = {
   janCode: string
-  selectedSkuId?: string
+  selectedSpuId?: string
   turnstileToken: string
 }
 

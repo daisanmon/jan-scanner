@@ -698,6 +698,224 @@ footer p {
   letter-spacing: -0.02em;
 }
 
+.poizon-market {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.poizon-market-primary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.poizon-market-primary > div {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.78rem;
+  border-radius: 0.9rem;
+  color: #fff;
+  background: var(--ink);
+}
+
+.poizon-market-primary span,
+.poizon-market-primary small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.55rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.poizon-market-primary strong {
+  font-size: 1.15rem;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+}
+
+.poizon-range {
+  padding: 0.72rem;
+  border: 1px solid #e3e7df;
+  border-radius: 0.85rem;
+  background: #fafbf8;
+}
+
+.poizon-range h3 {
+  margin: 0 0 0.55rem;
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.poizon-range dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.poizon-range dl > div {
+  min-width: 0;
+  padding: 0.55rem 0.4rem;
+  border-radius: 0.65rem;
+  background: #f0f2ed;
+  text-align: center;
+}
+
+.poizon-range .poizon-range-median {
+  color: #fff;
+  background: var(--olive);
+}
+
+.poizon-range dt {
+  color: var(--muted);
+  font-size: 0.53rem;
+  font-weight: 700;
+}
+
+.poizon-range-median dt {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.poizon-range dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.poizon-market-secondary {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.poizon-market-secondary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.72rem;
+  border-radius: 0.75rem;
+  background: #f3f5f1;
+}
+
+.poizon-market-secondary dt {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.poizon-market-secondary dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-align: right;
+}
+
+.poizon-size-details {
+  border: 1px solid #dce1d8;
+  border-radius: 0.9rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+.poizon-size-details summary {
+  padding: 0.85rem;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 850;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.poizon-size-details[open] summary {
+  border-bottom: 1px solid #e3e7df;
+}
+
+.poizon-size-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.7rem;
+  list-style: none;
+}
+
+.poizon-size-row {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.72rem;
+  border: 1px solid #e5e8e1;
+  border-radius: 0.8rem;
+  background: #fafbf8;
+}
+
+.poizon-size-row--scanned {
+  border-color: var(--olive);
+  box-shadow: inset 0 0 0 1px var(--olive);
+}
+
+.poizon-size-row-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.poizon-size-row-heading strong {
+  color: var(--ink);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.poizon-size-row-heading span {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.4rem;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--olive);
+  font-size: 0.5rem;
+  font-weight: 800;
+}
+
+.poizon-size-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.poizon-size-metrics > div {
+  min-width: 0;
+  padding: 0.5rem;
+  border-radius: 0.6rem;
+  background: #f0f2ed;
+}
+
+.poizon-size-metrics dt {
+  color: var(--muted);
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.poizon-size-metrics dd {
+  margin: 0.18rem 0 0;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.poizon-size-row-meta {
+  margin: 0;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.52rem;
+  line-height: 1.5;
+}
+
 .poizon-as-of {
   margin-top: 0.5rem;
   color: var(--muted);

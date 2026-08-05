@@ -33,7 +33,7 @@ function createEnv() {
         asiaMinPrice: 33_900,
         dataAsOf: '2026-08-04T00:00:00.000Z',
       },
-      cache: { product: false, price: false },
+      cache: { product: false, market: false, price: false },
     })
   })
   const env = {
@@ -49,7 +49,7 @@ function createEnv() {
   return { env, gatewayFetch }
 }
 
-function request(origin: string) {
+function request(origin: string, selectedSpuId?: string) {
   return new Request('https://worker.example/v1/poizon/lookups', {
     method: 'POST',
     headers: {
@@ -59,6 +59,7 @@ function request(origin: string) {
     },
     body: JSON.stringify({
       janCode: '4580563378953',
+      selectedSpuId,
       turnstileToken: 'browser-token',
     }),
   })
@@ -73,7 +74,7 @@ describe('public Worker API', () => {
   it('verifies Turnstile, strips its token, and adds exact-origin CORS', async () => {
     const { env, gatewayFetch } = createEnv()
     const response = await worker.fetch(
-      request('https://daisanmon.github.io'),
+      request('https://daisanmon.github.io', '1045489'),
       env,
     )
 
@@ -90,7 +91,10 @@ describe('public Worker API', () => {
     const forwarded = JSON.parse(
       String((gatewayFetch.mock.calls[0][1] as RequestInit).body),
     ) as Record<string, unknown>
-    expect(forwarded).toMatchObject({ janCode: '4580563378953' })
+    expect(forwarded).toMatchObject({
+      janCode: '4580563378953',
+      selectedSpuId: '1045489',
+    })
     expect(forwarded.requestId).toEqual(expect.any(String))
     expect(forwarded).not.toHaveProperty('turnstileToken')
   })
