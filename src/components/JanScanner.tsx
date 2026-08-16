@@ -118,11 +118,6 @@ export function JanScanner({ onRegister }: JanScannerProps) {
       }
 
       lastDetectionRef.current = { code, detectedAt: now }
-      sessionRef.current = false
-      sessionIdRef.current += 1
-      Quagga.offDetected(detectedHandler)
-      Quagga.pause()
-
       if (duplicateMessageTimerRef.current !== null) {
         clearTimeout(duplicateMessageTimerRef.current)
         duplicateMessageTimerRef.current = null
@@ -131,7 +126,7 @@ export function JanScanner({ onRegister }: JanScannerProps) {
       onRegister(code)
       setJanCode(code)
       setErrorMessage(null)
-      setStatus('success')
+      setStatus('scanning')
     },
     [onRegister],
   )
@@ -259,8 +254,7 @@ export function JanScanner({ onRegister }: JanScannerProps) {
   const cameraIsActive = status === 'starting' || status === 'scanning'
   const cameraIsVisible = cameraIsActive || status === 'success'
   const cameraCanStop = cameraIsActive || status === 'success'
-  const primaryLabel =
-    status === 'success' || janCode ? '再読み取り' : '読み取りを開始'
+  const primaryLabel = '読み取りを開始'
 
   return (
     <section className="scanner-card" aria-labelledby="scanner-title">
@@ -314,12 +308,6 @@ export function JanScanner({ onRegister }: JanScannerProps) {
           </div>
         )}
 
-        {status === 'success' && (
-          <div className="scan-success" role="status">
-            <span aria-hidden="true">✓</span>
-            読み取りを一時停止しました
-          </div>
-        )}
       </div>
 
       <p className="camera-hint">
@@ -352,26 +340,27 @@ export function JanScanner({ onRegister }: JanScannerProps) {
       )}
 
       <div className="scanner-actions">
-        <button
-          type="button"
-          className="button button--primary"
-          onClick={() => void startScanning()}
-          disabled={cameraIsActive}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M8 5H5v3M16 5h3v3M8 19H5v-3M16 19h3v-3M8 12h8" />
-          </svg>
-          {cameraIsActive ? '読み取り中…' : primaryLabel}
-        </button>
-        <button
-          type="button"
-          className="button button--secondary"
-          onClick={stopScanning}
-          disabled={!cameraCanStop}
-        >
-          <span className="stop-icon" aria-hidden="true" />
-          カメラを停止
-        </button>
+        {!cameraCanStop ? (
+          <button
+            type="button"
+            className="button button--primary scanner-start-button"
+            onClick={() => void startScanning()}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5H5v3M16 5h3v3M8 19H5v-3M16 19h3v-3M8 12h8" />
+            </svg>
+            {primaryLabel}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="button button--secondary scanner-stop-button"
+            onClick={stopScanning}
+          >
+            <span className="stop-icon" aria-hidden="true" />
+            読み取りを停止
+          </button>
+        )}
       </div>
     </section>
   )

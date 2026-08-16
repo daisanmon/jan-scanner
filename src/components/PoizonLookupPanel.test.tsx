@@ -108,6 +108,7 @@ const resolvedResponse = {
 
 describe('PoizonLookupPanel', () => {
   it('renders aggregate market metrics and expandable per-size rows', async () => {
+    const onLookupComplete = vi.fn()
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => Response.json(resolvedResponse)),
@@ -115,7 +116,12 @@ describe('PoizonLookupPanel', () => {
 
     render(
       <PoizonLookupPanel
-        target={{ janCode: '4580563378953', sequence: 1 }}
+        target={{
+          janCode: '4580563378953',
+          sequence: 1,
+          historyEntryId: 'history-entry',
+        }}
+        onLookupComplete={onLookupComplete}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Complete challenge' }))
@@ -131,5 +137,9 @@ describe('PoizonLookupPanel', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('JP 29 / EU 46 / US 12')).toBeInTheDocument()
     expect(screen.getByText('+25%')).toBeInTheDocument()
+    expect(onLookupComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ historyEntryId: 'history-entry' }),
+      resolvedResponse,
+    )
   })
 })

@@ -1,36 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   RegistrationMethod,
   RestoreMode,
   RestoreResult,
   ScanHistoryEntry,
+  StorablePoizonLookupResponse,
   StoredScanHistory,
 } from '../types/history'
-import { restoreHistory } from '../utils/historyTransfer'
-import { isValidJanCode } from '../utils/janCode'
+import { isHistoryEntry, restoreHistory } from '../utils/historyTransfer'
+import { createPoizonHistorySnapshot } from '../utils/poizonHistory'
+import { createEmptySourcingEvaluation } from '../utils/sourcingEvaluation'
 
 const STORAGE_KEY = 'jan-pocket:scan-history'
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 3
+const LEGACY_SCHEMA_VERSIONS = [1, 2]
 
 type LoadResult = {
   history: ScanHistoryEntry[]
   warning: string | null
-}
-
-function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const entry = value as Record<string, unknown>
-  return (
-    typeof entry.id === 'string' &&
-    typeof entry.janCode === 'string' &&
-    isValidJanCode(entry.janCode) &&
-    typeof entry.readAt === 'string' &&
-    !Number.isNaN(Date.parse(entry.readAt)) &&
-    (entry.method === 'camera' || entry.method === 'manual')
-  )
 }
 
 function loadHistory(): LoadResult {
@@ -48,7 +35,12 @@ function loadHistory(): LoadResult {
 
     const stored = parsed as Partial<StoredScanHistory>
     if (
-      stored.schemaVersion !== SCHEMA_VERSION ||
+      stored.schemaVersion !== SCHEMA_VERSION &&
+      !LEGACY_SCHEMA_VERSIONS.includes(stored.schemaVersion ?? -1)
+    ) {
+      throw new Error('Unsupported stored history')
+    }
+    if (
       !Array.isArray(stored.history) ||
       !stored.history.every(isHistoryEntry)
     ) {
@@ -76,6 +68,7 @@ function createEntryId(): string {
 export function useJanHistory() {
   const [initialResult] = useState(loadHistory)
   const [history, setHistory] = useState(initialResult.history)
+  const historyRef = useRef(initialResult.history)
   const [storageWarning, setStorageWarning] = useState(initialResult.warning)
 
   useEffect(() => {
@@ -95,29 +88,153 @@ export function useJanHistory() {
     }
   }, [history])
 
-  const addEntry = useCallback(
-    (janCode: string, method: RegistrationMethod) => {
-      const entry: ScanHistoryEntry = {
-        id: createEntryId(),
-        janCode,
-        readAt: new Date().toISOString(),
-        method,
-      }
-
-      setHistory((currentHistory) => [entry, ...currentHistory])
+  const updateHistory = useCallback(
+    (updater: (history: ScanHistoryEntry[]) => ScanHistoryEntry[]) => {
+      const next = updater(historyRef.current)
+      historyRef.current = next
+      setHistory(next)
     },
     [],
   )
 
+  const registerScan = useCallback(
+    (janCode: string, method: RegistrationMethod) => {
+      const now = new Date().toISOString()
+      const existing = historyRef.current.find((entry) => entry.janCode === janCode)
+
+      if (existing) {
+        const aggregation = existing.aggregation ?? {
+          scanCount: 1,
+          firstReadAt: existing.readAt,
+          lastReadAt: existing.readAt,
+        }
+        const shouldLookup =
+          existing.lookupStatus === 'error' ||
+          (!existing.poizon && existing.lookupStatus !== 'pending')
+        const updated: ScanHistoryEntry = {
+          ...existing,
+          readAt: now,
+          method,
+          aggregation: {
+            ...aggregation,
+            scanCount: aggregation.scanCount + 1,
+            lastReadAt: now,
+          },
+          ...(shouldLookup
+            ? { lookupStatus: 'pending' as const, lookupError: undefined }
+            : {}),
+        }
+        updateHistory((current) => [
+          updated,
+          ...current.filter((entry) => entry.id !== existing.id),
+        ])
+        return { id: existing.id, shouldLookup }
+      }
+
+      const entry: ScanHistoryEntry = {
+        id: createEntryId(),
+        janCode,
+        readAt: now,
+        method,
+        aggregation: { scanCount: 1, firstReadAt: now, lastReadAt: now },
+        lookupStatus: 'pending',
+      }
+
+      updateHistory((currentHistory) => [entry, ...currentHistory])
+      return { id: entry.id, shouldLookup: true }
+    },
+    [updateHistory],
+  )
+
+  const addEntry = useCallback(
+    (janCode: string, method: RegistrationMethod) =>
+      registerScan(janCode, method).id,
+    [registerScan],
+  )
+
+  const savePoizonResult = useCallback(
+    (id: string, response: StorablePoizonLookupResponse) => {
+      const snapshot = createPoizonHistorySnapshot(response)
+      updateHistory((currentHistory) =>
+        currentHistory.map((entry) =>
+          entry.id === id
+            ? {
+                ...entry,
+                poizon: snapshot,
+                sourcing: snapshot.sourcing,
+                lookupStatus: 'complete' as const,
+                lookupError: undefined,
+              }
+            : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const saveLookupReview = useCallback(
+    (id: string, message: string) => {
+      const sourcing = createEmptySourcingEvaluation('review')
+      updateHistory((current) =>
+        current.map((entry) =>
+          entry.id === id
+            ? {
+                ...entry,
+                sourcing,
+                lookupStatus: 'complete' as const,
+                lookupError: message,
+              }
+            : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const saveLookupError = useCallback(
+    (id: string, message: string) => {
+      const sourcing = createEmptySourcingEvaluation('error')
+      updateHistory((current) =>
+        current.map((entry) =>
+          entry.id === id
+            ? {
+                ...entry,
+                sourcing,
+                lookupStatus: 'error' as const,
+                lookupError: message,
+              }
+            : entry,
+        ),
+      )
+    },
+    [updateHistory],
+  )
+
+  const retryLookup = useCallback(
+    (id: string) => {
+      const entry = historyRef.current.find((item) => item.id === id)
+      if (!entry || entry.lookupStatus !== 'error') return null
+      updateHistory((current) =>
+        current.map((item) =>
+          item.id === id
+            ? { ...item, lookupStatus: 'pending' as const, lookupError: undefined }
+            : item,
+        ),
+      )
+      return entry
+    },
+    [updateHistory],
+  )
+
   const deleteEntry = useCallback((id: string) => {
-    setHistory((currentHistory) =>
+    updateHistory((currentHistory) =>
       currentHistory.filter((entry) => entry.id !== id),
     )
-  }, [])
+  }, [updateHistory])
 
   const clearHistory = useCallback(() => {
-    setHistory([])
-  }, [])
+    updateHistory(() => [])
+  }, [updateHistory])
 
   const restoreEntries = useCallback(
     (
@@ -131,6 +248,7 @@ export function useJanHistory() {
         mode,
         validationFailedCount,
       )
+      historyRef.current = result.history
       setHistory(result.history)
       return result
     },
@@ -145,6 +263,11 @@ export function useJanHistory() {
     history,
     storageWarning,
     addEntry,
+    registerScan,
+    savePoizonResult,
+    saveLookupReview,
+    saveLookupError,
+    retryLookup,
     deleteEntry,
     clearHistory,
     restoreEntries,

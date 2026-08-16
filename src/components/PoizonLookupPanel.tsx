@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { isPoizonPublicConfigReady, POIZON_PUBLIC_CONFIG } from '../config/publicConfig'
 import { usePoizonLookup } from '../hooks/usePoizonLookup'
+import { hasValidPoizonSession } from '../services/poizonApi'
 import type {
   PoizonMarketData,
   PoizonProductCandidate,
   PoizonSize,
   PoizonSizeMarketData,
 } from '../types/poizon'
+import type { StorablePoizonLookupResponse } from '../types/history'
 import { TurnstileWidget } from './TurnstileWidget'
 
 export type PoizonLookupTarget = {
   janCode: string
   sequence: number
+  historyEntryId?: string
 }
 
 type PoizonLookupPanelProps = {
   target: PoizonLookupTarget | null
+  onLookupComplete?: (
+    target: PoizonLookupTarget,
+    response: StorablePoizonLookupResponse,
+  ) => void
+  onLookupReview?: (target: PoizonLookupTarget, message: string) => void
+  onLookupError?: (target: PoizonLookupTarget, message: string) => void
 }
 
 const yenFormatter = new Intl.NumberFormat('ja-JP', {
@@ -61,7 +70,7 @@ function formatRatio(value: number | null): string {
   return value === null ? '—' : percentFormatter.format(value)
 }
 
-function ProductSummary({ product }: { product: PoizonProductCandidate }) {
+export function ProductSummary({ product }: { product: PoizonProductCandidate }) {
   return (
     <div className="poizon-product">
       <p className="poizon-product-title">{product.title || `SPU ${product.spuId}`}</p>
@@ -136,7 +145,7 @@ function SizeMarketRow({ size }: { size: PoizonSizeMarketData }) {
   )
 }
 
-function MarketView({ market }: { market: PoizonMarketData }) {
+export function MarketView({ market }: { market: PoizonMarketData }) {
   const { summary } = market
   const bestSelling = market.sizes.find(
     (size) => size.skuId === summary.bestSellingSkuId,
@@ -212,7 +221,7 @@ function MarketView({ market }: { market: PoizonMarketData }) {
   )
 }
 
-function LegacyPriceView({
+export function LegacyPriceView({
   price,
 }: {
   price: { globalMinPrice: number; asiaMinPrice: number; dataAsOf: string }
@@ -233,23 +242,64 @@ function LegacyPriceView({
   )
 }
 
-export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
+export function PoizonSavedResult({
+  response,
+}: {
+  response: StorablePoizonLookupResponse
+}) {
+  if (response.state === 'not_found') {
+    return <p className="poizon-message">このJANコードに一致する商品は見つかりませんでした。</p>
+  }
+
+  if (response.state === 'price_unavailable') {
+    return (
+      <div>
+        <ProductSummary product={response.product} />
+        {response.market && <MarketView market={response.market} />}
+        <p className="poizon-message poizon-message--warning">
+          商品は見つかりましたが、スキャンしたサイズの参考価格を取得できません。
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <ProductSummary product={response.product} />
+      {response.market
+        ? <MarketView market={response.market} />
+        : <LegacyPriceView price={response.price} />}
+    </div>
+  )
+}
+
+export function PoizonLookupPanel({
+  target,
+  onLookupComplete,
+  onLookupReview,
+  onLookupError,
+}: PoizonLookupPanelProps) {
   const { state, lookup } = usePoizonLookup()
   const [token, setToken] = useState<string | null>(null)
+  const [sessionAvailable, setSessionAvailable] = useState(
+    hasValidPoizonSession,
+  )
   const [challengeKey, setChallengeKey] = useState(0)
   const [challengeError, setChallengeError] = useState(false)
   const handledSequenceRef = useRef<number | null>(null)
+  const reportedErrorSequenceRef = useRef<number | null>(null)
   const configured = isPoizonPublicConfigReady()
 
   const renewChallenge = useCallback(() => {
     setToken(null)
+    setSessionAvailable(false)
     setChallengeError(false)
     setChallengeKey((current) => current + 1)
   }, [])
 
   const runLookup = useCallback(
     async (selectedSpuId?: string) => {
-      if (!target || !token) {
+      if (!target || (!token && !sessionAvailable)) {
         return
       }
       const currentToken = token
@@ -257,26 +307,55 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       const response = await lookup({
         janCode: target.janCode,
         selectedSpuId,
-        turnstileToken: currentToken,
+        turnstileToken: currentToken ?? undefined,
       })
-      if (!response || response.state === 'selection_required') {
+      const hasSession = hasValidPoizonSession()
+      setSessionAvailable(hasSession)
+      if (response && response.state !== 'selection_required') {
+        onLookupComplete?.(target, response)
+      }
+      if (response?.state === 'selection_required') {
+        onLookupReview?.(target, '複数の商品候補が見つかりました。')
+      }
+      if (!response && !hasSession) {
+        renewChallenge()
+      } else if (response?.state === 'selection_required' && !hasSession) {
         renewChallenge()
       }
     },
-    [lookup, renewChallenge, target, token],
+    [
+      lookup,
+      onLookupComplete,
+      onLookupReview,
+      renewChallenge,
+      sessionAvailable,
+      target,
+      token,
+    ],
   )
 
   useEffect(() => {
     if (
       configured &&
       target &&
-      token &&
+      (token || sessionAvailable) &&
       handledSequenceRef.current !== target.sequence
     ) {
       handledSequenceRef.current = target.sequence
       void runLookup()
     }
-  }, [configured, runLookup, target, token])
+  }, [configured, runLookup, sessionAvailable, target, token])
+
+  useEffect(() => {
+    if (
+      target &&
+      state.status === 'error' &&
+      reportedErrorSequenceRef.current !== target.sequence
+    ) {
+      reportedErrorSequenceRef.current = target.sequence
+      onLookupError?.(target, state.error.message)
+    }
+  }, [onLookupError, state, target])
 
   const handleChallengeError = useCallback(() => {
     setToken(null)
@@ -293,7 +372,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
   } else if (!target) {
     content = <p className="poizon-message">JANコードを読み取ると商品と市場データを照会します。</p>
   } else if (state.status === 'idle') {
-    content = <p className="poizon-message">ブラウザ確認が完了するまでお待ちください。</p>
+    content = <p className="poizon-message">商品・市場データの照会を開始します…</p>
   } else if (state.status === 'loading') {
     content = <p className="poizon-message" role="status">POIZONへ照会しています…</p>
   } else if (state.status === 'error') {
@@ -304,7 +383,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
           <button
             className="text-button"
             type="button"
-            disabled={!token}
+            disabled={!token && !sessionAvailable}
             onClick={() => void runLookup()}
           >
             再試行
@@ -313,7 +392,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       </div>
     )
   } else if (state.response.state === 'not_found') {
-    content = <p className="poizon-message">このJANコードに一致する商品は見つかりませんでした。</p>
+    content = <PoizonSavedResult response={state.response} />
   } else if (state.response.state === 'selection_required') {
     content = (
       <div>
@@ -323,7 +402,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
             <li key={candidate.spuId}>
               <button
                 type="button"
-                disabled={!token}
+                disabled={!token && !sessionAvailable}
                 onClick={() => void runLookup(candidate.spuId)}
               >
                 <span>{candidate.title || `SPU ${candidate.spuId}`}</span>
@@ -335,24 +414,9 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       </div>
     )
   } else if (state.response.state === 'price_unavailable') {
-    content = (
-      <div>
-        <ProductSummary product={state.response.product} />
-        {state.response.market && <MarketView market={state.response.market} />}
-        <p className="poizon-message poizon-message--warning">
-          商品は見つかりましたが、スキャンしたサイズの参考価格を取得できません。
-        </p>
-      </div>
-    )
+    content = <PoizonSavedResult response={state.response} />
   } else {
-    content = (
-      <div>
-        <ProductSummary product={state.response.product} />
-        {state.response.market
-          ? <MarketView market={state.response.market} />
-          : <LegacyPriceView price={state.response.price} />}
-      </div>
-    )
+    content = <PoizonSavedResult response={state.response} />
   }
 
   return (
@@ -365,7 +429,7 @@ export function PoizonLookupPanel({ target }: PoizonLookupPanelProps) {
       </div>
       {target && <p className="poizon-jan">JAN {target.janCode}</p>}
       {content}
-      {configured && (
+      {configured && target && !sessionAvailable && (
         <div className="poizon-challenge">
           <TurnstileWidget
             key={challengeKey}

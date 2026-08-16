@@ -18,7 +18,9 @@ GitHub Pages上のフロントエンドとPOIZON Open Platformの間に置くClo
 
 `selectedSpuId`はAPI 181が複数の異なる商品型番を返した後だけ指定します。同一SPUの複数サイズは自動的に1商品へまとめます。旧フロントエンドとの短期的な互換性のため`selectedSkuId`も受理しますが、新規実装では使用しません。
 
-通常の処理順序は、JANの厳密検証、Turnstile検証、API 181、SPUの確定、API 169、API 141です。API 169で全サイズと販売統計を取得し、API 141で最大20 SKUずつ参考価格を取得します。API 141は`region=JP`、`currency=JPY`、`biddingType=25`を使い、`saleType`は送りません。API 169が失敗した場合だけ、従来のAPI 93でスキャンしたサイズの価格を取得します。
+最初のTurnstile検証に成功すると、応答ヘッダー`X-POIZON-Session`と`X-POIZON-Session-Expires`で30分有効の署名済みセッションを返します。以後は`X-POIZON-Session`リクエストヘッダーを送れば、期限内はTurnstileを再実行しません。セッションはTurnstile secretからHMAC-SHA-256で署名し、許可hostnameとactionへ結び付けます。App SecretやTurnstile secret自体をブラウザへ返すことはありません。
+
+通常の処理順序は、JANの厳密検証、30分セッションまたはTurnstileの検証、API 181、SPUの確定、API 169、API 141です。API 169で全サイズと販売統計を取得し、API 141で最大20 SKUずつ参考価格を取得します。API 141は`region=JP`、`currency=JPY`、`biddingType=25`を使い、`saleType`は送りません。API 169が失敗した場合だけ、従来のAPI 93でスキャンしたサイズの価格を取得します。
 
 成功応答の`state`は次のいずれかです。
 

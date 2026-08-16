@@ -5,8 +5,13 @@ import type {
   ScanHistoryEntry,
 } from '../types/history'
 import { isValidJanCode } from './janCode'
+import {
+  isPoizonHistorySnapshot,
+  isSourcingEvaluation,
+} from './poizonHistory'
 
-export const BACKUP_SCHEMA_VERSION = 1
+export const BACKUP_SCHEMA_VERSION = 3
+const LEGACY_BACKUP_SCHEMA_VERSIONS = [1, 2]
 
 export type ParsedHistoryBackup = {
   exportedAt: string
@@ -30,10 +35,19 @@ function isValidDate(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
 }
 
-function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
+export function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
   if (!isRecord(value)) {
     return false
   }
+
+  const aggregationValid =
+    value.aggregation === undefined ||
+    (isRecord(value.aggregation) &&
+      typeof value.aggregation.scanCount === 'number' &&
+      Number.isInteger(value.aggregation.scanCount) &&
+      value.aggregation.scanCount > 0 &&
+      isValidDate(value.aggregation.firstReadAt) &&
+      isValidDate(value.aggregation.lastReadAt))
 
   return (
     typeof value.id === 'string' &&
@@ -41,7 +55,13 @@ function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
     typeof value.janCode === 'string' &&
     isValidJanCode(value.janCode) &&
     isValidDate(value.readAt) &&
-    (value.method === 'camera' || value.method === 'manual')
+    (value.method === 'camera' || value.method === 'manual') &&
+    (value.poizon === undefined || isPoizonHistorySnapshot(value.poizon)) &&
+    (value.sourcing === undefined || isSourcingEvaluation(value.sourcing)) &&
+    aggregationValid &&
+    (value.lookupStatus === undefined ||
+      ['pending', 'complete', 'error'].includes(String(value.lookupStatus))) &&
+    (value.lookupError === undefined || typeof value.lookupError === 'string')
   )
 }
 
@@ -63,7 +83,10 @@ function entriesAreEqual(left: ScanHistoryEntry, right: ScanHistoryEntry) {
     left.id === right.id &&
     left.janCode === right.janCode &&
     left.readAt === right.readAt &&
-    left.method === right.method
+    left.method === right.method &&
+    JSON.stringify(left.poizon) === JSON.stringify(right.poizon) &&
+    JSON.stringify(left.sourcing) === JSON.stringify(right.sourcing) &&
+    JSON.stringify(left.aggregation) === JSON.stringify(right.aggregation)
   )
 }
 
@@ -110,12 +133,35 @@ export function createJsonBackup(history: ScanHistoryEntry[], now = new Date()) 
 
 export function createCsvExport(history: ScanHistoryEntry[], now = new Date()) {
   const rows = [
-    ['JANコード', '読取日時', '登録方法'],
-    ...history.map((entry) => [
-      entry.janCode,
-      entry.readAt,
-      methodLabels[entry.method],
-    ]),
+    [
+      'JANコード',
+      '読取日時',
+      '登録方法',
+      '商品名',
+      'ブランド',
+      'spuId',
+      '過去30日販売数',
+      '仕入れ基準価格中央値',
+    ],
+    ...history.map((entry) => {
+      const product = entry.poizon?.product
+      const summary = entry.poizon?.market?.summary
+      const sourcing = entry.sourcing ?? entry.poizon?.sourcing
+      return [
+        entry.janCode,
+        entry.readAt,
+        methodLabels[entry.method],
+        product?.title ?? '',
+        product?.brandName ?? '',
+        product?.spuId ?? '',
+        sourcing?.totalSales30d?.toString() ??
+          summary?.globalSoldNum30Total?.toString() ?? '',
+        sourcing?.benchmarkMedian?.toString() ??
+          summary?.referencePrice.median?.toString() ??
+          entry.poizon?.price?.asiaMinPrice.toString() ??
+          '',
+      ]
+    }),
   ]
   const csv = rows
     .map((row) => row.map(escapeCsvValue).join(','))
@@ -179,7 +225,10 @@ export function parseHistoryBackup(text: string): ParsedHistoryBackup {
     )
   }
 
-  if (parsed.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (
+    parsed.schemaVersion !== BACKUP_SCHEMA_VERSION &&
+    !LEGACY_BACKUP_SCHEMA_VERSIONS.includes(Number(parsed.schemaVersion))
+  ) {
     throw new HistoryBackupValidationError(
       '対応していないバックアップ形式です。',
     )
