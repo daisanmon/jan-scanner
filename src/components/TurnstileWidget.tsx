@@ -10,6 +10,7 @@ type TurnstileApi = {
       'expired-callback': () => void
       'error-callback': () => void
       theme: 'auto'
+      appearance: 'interaction-only'
     },
   ) => string
   remove: (widgetId: string) => void
@@ -93,6 +94,7 @@ export function TurnstileWidget({
           'expired-callback': () => onToken(null),
           'error-callback': onError,
           theme: 'auto',
+          appearance: 'interaction-only',
         })
       })
       .catch(() => {

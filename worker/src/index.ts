@@ -3,6 +3,12 @@ import { errorResponse, jsonResponse } from './contracts'
 import type { WorkerEnv } from './env'
 import { ApiError } from './errors'
 import { isValidJanCode } from './jan'
+import {
+  issueBrowserSession,
+  SESSION_EXPIRES_HEADER,
+  SESSION_HEADER,
+  validateBrowserSession,
+} from './session'
 import { validateTurnstile } from './turnstile'
 
 export { PoizonGateway } from './gateway'
@@ -30,7 +36,8 @@ function corsHeaders(origin: string): HeadersInit {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, ngrok-skip-browser-warning',
+    'Access-Control-Allow-Headers': `Content-Type, ngrok-skip-browser-warning, ${SESSION_HEADER}`,
+    'Access-Control-Expose-Headers': `${SESSION_HEADER}, ${SESSION_EXPIRES_HEADER}`,
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
     'X-Content-Type-Options': 'nosniff',
@@ -85,12 +92,14 @@ async function parseLookupRequest(request: Request): Promise<LookupRequest> {
   if (typeof record.janCode !== 'string' || !isValidJanCode(record.janCode)) {
     throw new ApiError(400, 'INVALID_JAN', '有効なJANコードを指定してください。', false)
   }
-  if (
-    typeof record.turnstileToken !== 'string' ||
-    record.turnstileToken.length === 0 ||
-    record.turnstileToken.length > 2_048
-  ) {
-    throw new ApiError(400, 'INVALID_REQUEST', 'ブラウザ確認トークンが必要です。', false)
+  if (record.turnstileToken !== undefined) {
+    if (
+      typeof record.turnstileToken !== 'string' ||
+      record.turnstileToken.length === 0 ||
+      record.turnstileToken.length > 2_048
+    ) {
+      throw new ApiError(400, 'INVALID_REQUEST', 'ブラウザ確認トークンが正しくありません。', false)
+    }
   }
 
   for (const selection of [record.selectedSpuId, record.selectedSkuId]) {
@@ -114,7 +123,7 @@ async function parseLookupRequest(request: Request): Promise<LookupRequest> {
     janCode: record.janCode,
     selectedSpuId: record.selectedSpuId as string | undefined,
     selectedSkuId: record.selectedSkuId as string | undefined,
-    turnstileToken: record.turnstileToken,
+    turnstileToken: record.turnstileToken as string | undefined,
   }
 }
 
@@ -138,12 +147,29 @@ async function handleRequest(
 
   validateConfiguration(env)
   const input = await parseLookupRequest(request)
-  await validateTurnstile(
-    input.turnstileToken,
-    requestId,
-    request.headers.get('CF-Connecting-IP'),
-    env,
-  )
+  const suppliedSession = request.headers.get(SESSION_HEADER)
+  const hasValidSession = suppliedSession
+    ? await validateBrowserSession(suppliedSession, env)
+    : false
+  let issuedSession: Awaited<ReturnType<typeof issueBrowserSession>> | null = null
+
+  if (!hasValidSession) {
+    if (!input.turnstileToken) {
+      throw new ApiError(
+        403,
+        'TURNSTILE_REQUIRED',
+        'ブラウザの確認が必要です。',
+        true,
+      )
+    }
+    await validateTurnstile(
+      input.turnstileToken,
+      requestId,
+      request.headers.get('CF-Connecting-IP'),
+      env,
+    )
+    issuedSession = await issueBrowserSession(env)
+  }
 
   const gatewayInput: GatewayLookupRequest = {
     requestId,
@@ -157,7 +183,19 @@ async function handleRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(gatewayInput),
   })
-  return withCors(response, origin)
+  const corsResponse = withCors(response, origin)
+  if (!issuedSession) {
+    return corsResponse
+  }
+
+  const headers = new Headers(corsResponse.headers)
+  headers.set(SESSION_HEADER, issuedSession.token)
+  headers.set(SESSION_EXPIRES_HEADER, issuedSession.expiresAt)
+  return new Response(corsResponse.body, {
+    status: corsResponse.status,
+    statusText: corsResponse.statusText,
+    headers,
+  })
 }
 
 export default {

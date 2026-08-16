@@ -34,44 +34,49 @@ export function ManualEntry({ onRegister }: ManualEntryProps) {
   }
 
   return (
-    <section className="feature-card" aria-labelledby="manual-entry-title">
-      <div className="feature-heading">
-        <div>
+    <details className="feature-card collapsible-card" aria-labelledby="manual-entry-title">
+      <summary className="collapsible-summary">
+        <span>
           <p className="eyebrow">MANUAL ENTRY</p>
-          <h2 id="manual-entry-title">JANコードを手入力</h2>
-        </div>
-      </div>
+          <span className="collapsible-title" id="manual-entry-title">
+            JANコードを手入力
+          </span>
+        </span>
+        <span className="collapsible-chevron" aria-hidden="true" />
+      </summary>
 
-      <form className="manual-form" onSubmit={handleSubmit} noValidate>
-        <label htmlFor="manual-jan-code">JANコード</label>
-        <div className="manual-input-row">
-          <input
-            id="manual-jan-code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="off"
-            enterKeyHint="done"
-            placeholder="8桁または13桁"
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value)
-              if (errorMessage) {
-                setErrorMessage(null)
-              }
-            }}
-            aria-describedby={errorMessage ? 'manual-entry-error' : undefined}
-            aria-invalid={errorMessage ? true : undefined}
-          />
-          <button type="submit" className="button button--primary">
-            登録
-          </button>
-        </div>
-        {errorMessage && (
-          <p id="manual-entry-error" className="field-error" role="alert">
-            {errorMessage}
-          </p>
-        )}
-      </form>
-    </section>
+      <div className="collapsible-body">
+        <form className="manual-form" onSubmit={handleSubmit} noValidate>
+          <label htmlFor="manual-jan-code">JANコード</label>
+          <div className="manual-input-row">
+            <input
+              id="manual-jan-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              enterKeyHint="done"
+              placeholder="8桁または13桁"
+              value={value}
+              onChange={(event) => {
+                setValue(event.target.value)
+                if (errorMessage) {
+                  setErrorMessage(null)
+                }
+              }}
+              aria-describedby={errorMessage ? 'manual-entry-error' : undefined}
+              aria-invalid={errorMessage ? true : undefined}
+            />
+            <button type="submit" className="button button--primary">
+              登録
+            </button>
+          </div>
+          {errorMessage && (
+            <p id="manual-entry-error" className="field-error" role="alert">
+              {errorMessage}
+            </p>
+          )}
+        </form>
+      </div>
+    </details>
   )
 }
