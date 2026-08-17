@@ -8,6 +8,7 @@ export type PoizonProductCandidate = {
   globalSpuId?: string
   title: string
   brandName: string
+  imageUrl?: string
   skuId: string
   globalSkuId: string
   janCode: string

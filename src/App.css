@@ -605,7 +605,48 @@ footer p {
 
 .poizon-product {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+}
+
+.poizon-product-copy {
+  display: grid;
+  min-width: 0;
   gap: 0.35rem;
+}
+
+.product-image {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 4.75rem;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid #e1e5dd;
+  border-radius: 0.85rem;
+  background: #f7f8f5;
+}
+
+.product-image--compact {
+  width: 3.5rem;
+  border-radius: 0.7rem;
+}
+
+.product-image__media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.product-image__placeholder {
+  padding: 0.35rem;
+  color: var(--muted);
+  font-size: 0.55rem;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .poizon-product-title {
@@ -628,6 +669,7 @@ footer p {
 
 .poizon-identifiers {
   display: grid;
+  grid-column: 1 / -1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.45rem;
   margin: 0.55rem 0 0;
@@ -917,8 +959,10 @@ footer p {
 
 .poizon-candidates button {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   width: 100%;
-  gap: 0.25rem;
+  gap: 0.65rem;
   padding: 0.75rem;
   border: 1px solid #d9ded5;
   border-radius: 0.8rem;
@@ -934,7 +978,14 @@ footer p {
   opacity: 0.5;
 }
 
-.poizon-candidates span {
+.poizon-candidate-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.poizon-candidate-title {
+  overflow-wrap: anywhere;
   font-size: 0.72rem;
   font-weight: 750;
 }
@@ -1240,6 +1291,14 @@ footer p {
   font-size: 0.76rem;
   font-weight: 800;
   line-height: 1.45;
+}
+
+.history-product {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
 }
 
 .history-market-highlights {
@@ -1575,10 +1634,22 @@ footer p + p::before {
 }
 
 .candidate-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 0.75rem;
+}
+
+.candidate-heading-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.candidate-heading-copy {
+  min-width: 0;
 }
 
 .candidate-brand,
@@ -1601,6 +1672,7 @@ footer p + p::before {
 
 .candidate-heading h3 {
   margin-top: 0.15rem;
+  overflow-wrap: anywhere;
   font-size: 1rem;
   line-height: 1.35;
 }

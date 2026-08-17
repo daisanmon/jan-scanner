@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ScanHistoryEntry } from '../types/history'
+import { ProductImage } from './ProductImage'
 import { SizeEvaluationDetails } from './SourcingViews'
 import {
   getEntryEvaluation,
@@ -85,7 +86,15 @@ export function ScanHistory({
                   </button>
                 </div>
                 {entry.poizon?.product && (
-                  <p className="history-product-title">{entry.poizon.product.title}</p>
+                  <div className="history-product">
+                    <ProductImage
+                      imageUrl={entry.poizon.product.imageUrl}
+                      size="compact"
+                    />
+                    <p className="history-product-title">
+                      {entry.poizon.product.title || `SPU ${entry.poizon.product.spuId}`}
+                    </p>
+                  </div>
                 )}
                 {entry.lookupError && <p className="history-error-note">{entry.lookupError}</p>}
                 {entry.lookupStatus === 'error' && onRetry && (

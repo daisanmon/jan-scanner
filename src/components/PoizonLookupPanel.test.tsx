@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../config/publicConfig', () => ({
   POIZON_PUBLIC_CONFIG: {
@@ -20,6 +20,8 @@ vi.mock('./TurnstileWidget', () => ({
 
 import { PoizonLookupPanel } from './PoizonLookupPanel'
 
+afterEach(cleanup)
+
 const resolvedResponse = {
   requestId: 'request-id',
   state: 'resolved',
@@ -27,6 +29,7 @@ const resolvedResponse = {
     spuId: '1045489',
     title: 'Test sneaker',
     brandName: 'Test brand',
+    imageUrl: 'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
     skuId: '600297001',
     globalSkuId: '10600297001',
     janCode: '4580563378953',
@@ -129,6 +132,11 @@ describe('PoizonLookupPanel', () => {
     expect(
       await screen.findByText('JAN照会サイズ: JP 28.5 / EU 45 / US 11.5'),
     ).toBeInTheDocument()
+    const image = document.querySelector('.poizon-product img')
+    expect(image).toHaveAttribute(
+      'src',
+      'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
+    )
     expect(screen.getByText('中国市場・過去30日販売数')).toBeInTheDocument()
     expect(screen.getByText('600')).toBeInTheDocument()
     expect(screen.getAllByText('￥34,400')).toHaveLength(2)
@@ -141,5 +149,47 @@ describe('PoizonLookupPanel', () => {
       expect.objectContaining({ historyEntryId: 'history-entry' }),
       resolvedResponse,
     )
+  })
+
+  it('renders an image for every product in the selection list', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          requestId: 'selection-request',
+          state: 'selection_required',
+          candidates: [
+            resolvedResponse.product,
+            {
+              ...resolvedResponse.product,
+              spuId: '2045489',
+              skuId: '700297001',
+              globalSkuId: '10700297001',
+              title: 'Another sneaker',
+              imageUrl: 'https://cdn.poizon.com/pro-img/another-sneaker.jpg',
+            },
+          ],
+          cache: { product: false, market: false, price: false },
+        }),
+      ),
+    )
+
+    render(
+      <PoizonLookupPanel
+        target={{ janCode: '4580563378953', sequence: 2 }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Complete challenge' }))
+
+    expect(await screen.findByText('Another sneaker')).toBeInTheDocument()
+    expect(document.querySelectorAll('.poizon-candidates img')).toHaveLength(2)
+    expect(
+      Array.from(document.querySelectorAll('.poizon-candidates img')).map(
+        (image) => image.getAttribute('src'),
+      ),
+    ).toEqual([
+      'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
+      'https://cdn.poizon.com/pro-img/another-sneaker.jpg',
+    ])
   })
 })

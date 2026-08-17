@@ -24,6 +24,7 @@ const marketEntry: ScanHistoryEntry = {
       spuId: '1045489',
       title: 'Test sneaker',
       brandName: 'Test brand',
+      imageUrl: 'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
       skuId: '600297001',
       globalSkuId: '10600297001',
       janCode: '4580563378953',
@@ -65,6 +66,14 @@ describe('history backup compatibility', () => {
 
     expect(parsed.schemaVersion).toBe(BACKUP_SCHEMA_VERSION)
     expect(parsed.history[0].poizon?.product?.spuId).toBe('1045489')
+    expect(parsed.history[0].poizon?.product?.imageUrl).toBe(
+      'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
+    )
+
+    const restored = parseHistoryBackup(text)
+    expect(restored.history[0].poizon?.product?.imageUrl).toBe(
+      'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
+    )
   })
 
   it('adds product columns to the CSV export', async () => {

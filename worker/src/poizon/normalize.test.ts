@@ -10,6 +10,7 @@ import {
   normalizeBarcodeCandidates,
   normalizeBatchPrices,
   normalizeMarketProduct,
+  normalizePoizonImageUrl,
   normalizePrice,
 } from './normalize'
 
@@ -20,6 +21,7 @@ describe('POIZON response normalization', () => {
         spuId: '1045489',
         title: 'Test sneaker',
         brandName: 'Test brand',
+        imageUrl: 'https://cdn.poizon.com/pro-img/sku/test-sneaker-28-5.jpg',
         skuId: '600297001',
         globalSkuId: '10600297001',
         janCode: '4580563378953',
@@ -30,6 +32,65 @@ describe('POIZON response normalization', () => {
         ],
       },
     ])
+  })
+
+  it('prefers the matching SKU image over the SPU image', () => {
+    const [candidate] = normalizeBarcodeCandidates(barcodeFixture, '4580563378953')
+
+    expect(candidate.imageUrl).toBe(
+      'https://cdn.poizon.com/pro-img/sku/test-sneaker-28-5.jpg',
+    )
+  })
+
+  it('falls back to the SPU image when the matching SKU has no image', () => {
+    const response = structuredClone(barcodeFixture)
+    Reflect.deleteProperty(response.data.contents[0].skuInfoList[0], 'logoUrl')
+
+    const [candidate] = normalizeBarcodeCandidates(response, '4580563378953')
+
+    expect(candidate.imageUrl).toBe(
+      'https://cdn.poizon.com/pro-img/spu/test-sneaker.jpg',
+    )
+  })
+
+  it('omits the image when neither the matching SKU nor the SPU has one', () => {
+    const response = structuredClone(barcodeFixture)
+    Reflect.deleteProperty(response.data.contents[0].skuInfoList[0], 'logoUrl')
+    Reflect.deleteProperty(response.data.contents[0].spuInfo, 'logoUrl')
+
+    const [candidate] = normalizeBarcodeCandidates(response, '4580563378953')
+
+    expect(candidate).not.toHaveProperty('imageUrl')
+  })
+
+  it.each([
+    ['malformed URL', 'not a URL'],
+    ['HTTP URL', 'http://cdn.poizon.com/product.jpg'],
+    ['unapproved host', 'https://images.example.com/product.jpg'],
+  ])('omits a %s without dropping the product candidate', (_, imageUrl) => {
+    const response = structuredClone(barcodeFixture)
+    response.data.contents[0].skuInfoList[0].logoUrl = imageUrl
+    Reflect.deleteProperty(response.data.contents[0].spuInfo, 'logoUrl')
+
+    const candidates = normalizeBarcodeCandidates(response, '4580563378953')
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).not.toHaveProperty('imageUrl')
+    expect(candidates[0].sizes).toEqual([
+      { system: 'JP', value: '28.5' },
+      { system: 'EU', value: '45' },
+      { system: 'US Men', value: '11.5' },
+    ])
+  })
+
+  it('trims and validates only official HTTPS CDN image URLs', () => {
+    expect(
+      normalizePoizonImageUrl('  https://cdn.poizon.com/product.jpg  '),
+    ).toBe('https://cdn.poizon.com/product.jpg')
+    expect(normalizePoizonImageUrl(123)).toBeUndefined()
+    expect(
+      normalizePoizonImageUrl('https://cdn.poizon.com.example/product.jpg'),
+    ).toBeUndefined()
   })
 
   it('accepts a matching API 181 result when POIZON leaves barCode empty', () => {

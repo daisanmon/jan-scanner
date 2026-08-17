@@ -7,12 +7,14 @@ export const barcodeFixture = {
         spuInfo: {
           title: 'Test sneaker',
           brandName: 'Test brand',
+          logoUrl: 'https://cdn.poizon.com/pro-img/spu/test-sneaker.jpg',
         },
         skuInfoList: [
           {
             barCode: '4580563378953',
             skuId: 600297001,
             globalSkuId: 10600297001,
+            logoUrl: 'https://cdn.poizon.com/pro-img/sku/test-sneaker-28-5.jpg',
             regionSalePvInfoList: [
               {
                 sizeInfos: [
