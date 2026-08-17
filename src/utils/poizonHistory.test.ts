@@ -12,6 +12,7 @@ const response: PoizonResolvedResponse = {
     spuId: '1045489',
     title: 'Test sneaker',
     brandName: 'Test brand',
+    imageUrl: 'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
     skuId: '600297001',
     globalSkuId: '10600297001',
     janCode: '4580563378953',
@@ -76,6 +77,9 @@ describe('POIZON history snapshots', () => {
     expect(snapshot.savedAt).toBe('2026-08-05T00:01:00.000Z')
     expect(snapshot.market?.sizes).toHaveLength(1)
     expect(snapshot.market?.summary.globalSoldNum30Total).toBe(147)
+    expect(snapshot.product?.imageUrl).toBe(
+      'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
+    )
     expect(snapshot).not.toHaveProperty('requestId')
     expect(snapshot).not.toHaveProperty('cache')
     expect(isPoizonHistorySnapshot(snapshot)).toBe(true)
@@ -86,6 +90,31 @@ describe('POIZON history snapshots', () => {
     const malformed = {
       ...snapshot,
       market: { ...snapshot.market, sizes: 'not-an-array' },
+    }
+
+    expect(isPoizonHistorySnapshot(malformed)).toBe(false)
+  })
+
+  it('accepts legacy products without an image URL', () => {
+    const snapshot = createPoizonHistorySnapshot(response)
+    const legacy = {
+      ...snapshot,
+      product: snapshot.product
+        ? { ...snapshot.product, imageUrl: undefined }
+        : undefined,
+    }
+
+    expect(isPoizonHistorySnapshot(legacy)).toBe(true)
+  })
+
+  it.each([
+    'http://cdn.poizon.com/pro-img/test-sneaker.jpg',
+    'not a URL',
+  ])('rejects an invalid restored image URL: %s', (imageUrl) => {
+    const snapshot = createPoizonHistorySnapshot(response)
+    const malformed = {
+      ...snapshot,
+      product: snapshot.product ? { ...snapshot.product, imageUrl } : undefined,
     }
 
     expect(isPoizonHistorySnapshot(malformed)).toBe(false)

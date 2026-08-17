@@ -4,6 +4,7 @@ import type {
   SourcingEvaluation,
 } from '../types/history'
 import { displaySizes, getEntryEvaluation } from '../utils/sourcingDisplay'
+import { ProductImage } from './ProductImage'
 
 const yenFormatter = new Intl.NumberFormat('ja-JP', {
   style: 'currency',
@@ -69,9 +70,12 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
   return (
     <article className="candidate-card">
       <div className="candidate-heading">
-        <div>
-          <p className="candidate-brand">{product?.brandName || 'POIZON'}</p>
-          <h3>{product?.title || entry.janCode}</h3>
+        <div className="candidate-heading-main">
+          <ProductImage imageUrl={product?.imageUrl} size="compact" />
+          <div className="candidate-heading-copy">
+            <p className="candidate-brand">{product?.brandName || 'POIZON'}</p>
+            <h3>{product?.title || entry.janCode}</h3>
+          </div>
         </div>
         <span className="candidate-badge">候補</span>
       </div>

@@ -19,6 +19,18 @@ function isDate(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
 }
 
+function isHttpsImageUrl(value: unknown): value is string {
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function isSize(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -33,6 +45,7 @@ function isProduct(value: unknown): boolean {
     typeof value.spuId === 'string' &&
     typeof value.title === 'string' &&
     typeof value.brandName === 'string' &&
+    (value.imageUrl === undefined || isHttpsImageUrl(value.imageUrl)) &&
     typeof value.skuId === 'string' &&
     typeof value.globalSkuId === 'string' &&
     typeof value.janCode === 'string' &&

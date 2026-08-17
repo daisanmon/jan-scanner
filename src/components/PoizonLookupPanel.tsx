@@ -9,6 +9,7 @@ import type {
   PoizonSizeMarketData,
 } from '../types/poizon'
 import type { StorablePoizonLookupResponse } from '../types/history'
+import { ProductImage } from './ProductImage'
 import { TurnstileWidget } from './TurnstileWidget'
 
 export type PoizonLookupTarget = {
@@ -73,9 +74,12 @@ function formatRatio(value: number | null): string {
 export function ProductSummary({ product }: { product: PoizonProductCandidate }) {
   return (
     <div className="poizon-product">
-      <p className="poizon-product-title">{product.title || `SPU ${product.spuId}`}</p>
-      {product.brandName && <p className="poizon-brand">{product.brandName}</p>}
-      <p className="poizon-size">JAN照会サイズ: {displaySizes(product.sizes)}</p>
+      <ProductImage imageUrl={product.imageUrl} />
+      <div className="poizon-product-copy">
+        <p className="poizon-product-title">{product.title || `SPU ${product.spuId}`}</p>
+        {product.brandName && <p className="poizon-brand">{product.brandName}</p>}
+        <p className="poizon-size">JAN照会サイズ: {displaySizes(product.sizes)}</p>
+      </div>
       <dl className="poizon-identifiers">
         <div><dt>spuId</dt><dd>{product.spuId}</dd></div>
         <div><dt>skuId</dt><dd>{product.skuId}</dd></div>
@@ -405,8 +409,13 @@ export function PoizonLookupPanel({
                 disabled={!token && !sessionAvailable}
                 onClick={() => void runLookup(candidate.spuId)}
               >
-                <span>{candidate.title || `SPU ${candidate.spuId}`}</span>
-                <strong>SPU {candidate.spuId}・{displaySizes(candidate.sizes)}</strong>
+                <ProductImage imageUrl={candidate.imageUrl} size="compact" />
+                <span className="poizon-candidate-copy">
+                  <span className="poizon-candidate-title">
+                    {candidate.title || `SPU ${candidate.spuId}`}
+                  </span>
+                  <strong>SPU {candidate.spuId}・{displaySizes(candidate.sizes)}</strong>
+                </span>
               </button>
             </li>
           ))}

@@ -18,6 +18,27 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+export function normalizePoizonImageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return undefined
+  }
+
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'https:' || url.hostname !== 'cdn.poizon.com') {
+      return undefined
+    }
+    return trimmed
+  } catch {
+    return undefined
+  }
+}
+
 function integerValue(value: unknown): number | null {
   if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
     return value
@@ -123,12 +144,16 @@ export function normalizeBarcodeCandidates(
       if (!skuId || !globalSkuId) {
         continue
       }
+      const imageUrl =
+        normalizePoizonImageUrl(rawSku.logoUrl) ??
+        normalizePoizonImageUrl(spuInfo.logoUrl)
 
       candidates.set(skuId, {
         spuId,
         ...(globalSpuId ? { globalSpuId } : {}),
         title: stringValue(spuInfo.title),
         brandName: stringValue(spuInfo.brandName),
+        ...(imageUrl ? { imageUrl } : {}),
         skuId,
         globalSkuId,
         janCode,
