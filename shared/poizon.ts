@@ -6,6 +6,7 @@ export type PoizonSize = {
 export type PoizonProductCandidate = {
   spuId: string
   globalSpuId?: string
+  articleNumber?: string
   title: string
   brandName: string
   imageUrl?: string

@@ -121,6 +121,7 @@ export function normalizeBarcodeCandidates(
     const spuInfo = isRecord(content.spuInfo) ? content.spuInfo : {}
     const spuId = stringId(content.spuId ?? spuInfo.spuId)
     const globalSpuId = stringId(content.globalSpuId ?? spuInfo.globalSpuId)
+    const articleNumber = stringValue(spuInfo.articleNumber).trim()
     const skuList = Array.isArray(content.skuInfoList) ? content.skuInfoList : []
 
     if (!spuId) {
@@ -151,6 +152,7 @@ export function normalizeBarcodeCandidates(
       candidates.set(skuId, {
         spuId,
         ...(globalSpuId ? { globalSpuId } : {}),
+        ...(articleNumber ? { articleNumber } : {}),
         title: stringValue(spuInfo.title),
         brandName: stringValue(spuInfo.brandName),
         ...(imageUrl ? { imageUrl } : {}),

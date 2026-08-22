@@ -9,7 +9,12 @@ import type {
 } from '../types/history'
 import { isHistoryEntry, restoreHistory } from '../utils/historyTransfer'
 import { createPoizonHistorySnapshot } from '../utils/poizonHistory'
-import { createEmptySourcingEvaluation } from '../utils/sourcingEvaluation'
+import {
+  createEmptySourcingEvaluation,
+  DEFAULT_SOURCING_SETTINGS,
+  evaluateSourcingMarket,
+  type SourcingSettings,
+} from '../utils/sourcingEvaluation'
 
 const STORAGE_KEY = 'jan-pocket:scan-history'
 const SCHEMA_VERSION = 3
@@ -65,7 +70,9 @@ function createEntryId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-export function useJanHistory() {
+export function useJanHistory(
+  sourcingSettings: SourcingSettings = DEFAULT_SOURCING_SETTINGS,
+) {
   const [initialResult] = useState(loadHistory)
   const [history, setHistory] = useState(initialResult.history)
   const historyRef = useRef(initialResult.history)
@@ -96,6 +103,35 @@ export function useJanHistory() {
     },
     [],
   )
+
+  useEffect(() => {
+    updateHistory((current) => {
+      let changed = false
+      const next = current.map((entry) => {
+        if (!entry.poizon?.market) return entry
+        const evaluation = entry.sourcing ?? entry.poizon.sourcing
+        if (
+          evaluation?.minimumProfitRate === sourcingSettings.minimumProfitRate &&
+          evaluation.minimumProfitAmount === sourcingSettings.minimumProfitAmount
+        ) {
+          return entry
+        }
+
+        changed = true
+        const sourcing = evaluateSourcingMarket(
+          entry.poizon.market,
+          new Date(),
+          sourcingSettings,
+        )
+        return {
+          ...entry,
+          sourcing,
+          poizon: { ...entry.poizon, sourcing },
+        }
+      })
+      return changed ? next : current
+    })
+  }, [sourcingSettings, updateHistory])
 
   const registerScan = useCallback(
     (janCode: string, method: RegistrationMethod) => {
@@ -154,7 +190,11 @@ export function useJanHistory() {
 
   const savePoizonResult = useCallback(
     (id: string, response: StorablePoizonLookupResponse) => {
-      const snapshot = createPoizonHistorySnapshot(response)
+      const snapshot = createPoizonHistorySnapshot(
+        response,
+        new Date(),
+        sourcingSettings,
+      )
       updateHistory((currentHistory) =>
         currentHistory.map((entry) =>
           entry.id === id
@@ -169,12 +209,16 @@ export function useJanHistory() {
         ),
       )
     },
-    [updateHistory],
+    [sourcingSettings, updateHistory],
   )
 
   const saveLookupReview = useCallback(
     (id: string, message: string) => {
-      const sourcing = createEmptySourcingEvaluation('review')
+      const sourcing = createEmptySourcingEvaluation(
+        'review',
+        new Date(),
+        sourcingSettings,
+      )
       updateHistory((current) =>
         current.map((entry) =>
           entry.id === id
@@ -188,12 +232,16 @@ export function useJanHistory() {
         ),
       )
     },
-    [updateHistory],
+    [sourcingSettings, updateHistory],
   )
 
   const saveLookupError = useCallback(
     (id: string, message: string) => {
-      const sourcing = createEmptySourcingEvaluation('error')
+      const sourcing = createEmptySourcingEvaluation(
+        'error',
+        new Date(),
+        sourcingSettings,
+      )
       updateHistory((current) =>
         current.map((entry) =>
           entry.id === id
@@ -207,7 +255,7 @@ export function useJanHistory() {
         ),
       )
     },
-    [updateHistory],
+    [sourcingSettings, updateHistory],
   )
 
   const retryLookup = useCallback(

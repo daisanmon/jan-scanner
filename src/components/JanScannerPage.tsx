@@ -12,8 +12,10 @@ import type { RegistrationMethod } from '../types/history'
 import { evaluateSourcingMarket } from '../utils/sourcingEvaluation'
 import { CandidateCard } from './SourcingViews'
 import { getEntryEvaluation } from '../utils/sourcingDisplay'
+import { useSourcingSettings } from '../hooks/useSourcingSettings'
+import { SourcingSettings } from './SourcingSettings'
 
-type AppTab = 'scan' | 'candidates' | 'history'
+type AppTab = 'scan' | 'candidates' | 'history' | 'settings'
 
 type RecentResult = {
   janCode: string
@@ -27,6 +29,7 @@ export function JanScannerPage() {
   const [recentResult, setRecentResult] = useState<RecentResult | null>(null)
   const sequenceRef = useRef(0)
   const recentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { settings, setSettings, resetSettings } = useSourcingSettings()
   const {
     history,
     storageWarning,
@@ -39,7 +42,7 @@ export function JanScannerPage() {
     clearHistory,
     restoreEntries,
     dismissStorageWarning,
-  } = useJanHistory()
+  } = useJanHistory(settings)
 
   const showRecent = useCallback((result: RecentResult) => {
     setRecentResult(result)
@@ -86,7 +89,7 @@ export function JanScannerPage() {
       }
       const evaluation = response.state === 'not_found'
         ? null
-        : evaluateSourcingMarket(response.market)
+        : evaluateSourcingMarket(response.market, new Date(), settings)
       const label = response.state === 'not_found'
         ? '商品が見つかりません'
         : evaluation?.status === 'candidate'
@@ -101,7 +104,7 @@ export function JanScannerPage() {
       })
       setLookupQueue((current) => current.filter((item) => item.sequence !== target.sequence))
     },
-    [savePoizonResult, showRecent],
+    [savePoizonResult, settings, showRecent],
   )
 
   const handleLookupReview = useCallback((target: PoizonLookupTarget, message: string) => {
@@ -191,11 +194,25 @@ export function JanScannerPage() {
         </div>
       )}
 
+      {activeTab === 'settings' && (
+        <section className="tab-panel settings-tab" aria-labelledby="settings-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">SETTINGS</p><h1 id="settings-title">設定</h1></div>
+          </div>
+          <SourcingSettings
+            settings={settings}
+            onSave={setSettings}
+            onReset={resetSettings}
+          />
+        </section>
+      )}
+
       <nav className="bottom-nav" aria-label="メインナビゲーション">
         {([
           ['scan', '⌁', 'スキャン'],
           ['candidates', '☆', '候補'],
           ['history', '◷', '履歴'],
+          ['settings', '⚙', '設定'],
         ] as const).map(([tab, icon, label]) => (
           <button key={tab} type="button" className={activeTab === tab ? 'is-active' : ''} onClick={() => setActiveTab(tab)} aria-current={activeTab === tab ? 'page' : undefined}>
             <span aria-hidden="true">{icon}</span>{label}

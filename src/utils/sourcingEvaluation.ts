@@ -20,6 +20,16 @@ export const POIZON_FEE_POLICY = {
   ],
 } as const
 
+export type SourcingSettings = {
+  minimumProfitRate: number
+  minimumProfitAmount: number
+}
+
+export const DEFAULT_SOURCING_SETTINGS: SourcingSettings = {
+  minimumProfitRate: 0.15,
+  minimumProfitAmount: 1_000,
+}
+
 export type FeeCalculation = {
   referencePrice: number
   listingFee: number
@@ -29,7 +39,10 @@ export type FeeCalculation = {
   purchaseBenchmark: number | null
 }
 
-export function calculateSourcingFees(referencePrice: number): FeeCalculation {
+export function calculateSourcingFees(
+  referencePrice: number,
+  settings = DEFAULT_SOURCING_SETTINGS,
+): FeeCalculation {
   const listingFee = Math.min(
     POIZON_FEE_POLICY.listingFeeMax,
     Math.max(
@@ -50,8 +63,8 @@ export function calculateSourcingFees(referencePrice: number): FeeCalculation {
     transferFee -
     POIZON_FEE_POLICY.supportFee
   const rawBenchmark = Math.min(
-    estimatedNetProceeds - 1_000,
-    estimatedNetProceeds * 0.85,
+    estimatedNetProceeds - settings.minimumProfitAmount,
+    estimatedNetProceeds * (1 - settings.minimumProfitRate),
   )
   const purchaseBenchmark = Math.floor(rawBenchmark / 100) * 100
 
@@ -65,9 +78,14 @@ export function calculateSourcingFees(referencePrice: number): FeeCalculation {
   }
 }
 
-function evaluateSize(size: PoizonSizeMarketData): SizeSourcingEvaluation {
+function evaluateSize(
+  size: PoizonSizeMarketData,
+  settings: SourcingSettings,
+): SizeSourcingEvaluation {
   const fees =
-    size.asiaMinPrice === null ? null : calculateSourcingFees(size.asiaMinPrice)
+    size.asiaMinPrice === null
+      ? null
+      : calculateSourcingFees(size.asiaMinPrice, settings)
 
   return {
     skuId: size.skuId,
@@ -75,6 +93,7 @@ function evaluateSize(size: PoizonSizeMarketData): SizeSourcingEvaluation {
     sizes: size.sizes,
     scanned: size.scanned,
     sales30d: size.globalSoldNum30,
+    averageTransactionPrice: size.averageTransactionPrice,
     referencePrice: size.asiaMinPrice,
     listingFee: fees?.listingFee ?? null,
     operationFee: fees?.operationFee ?? null,
@@ -131,9 +150,10 @@ export function aggregateBenchmarks(
 export function evaluateSourcingMarket(
   market: PoizonMarketData | undefined,
   now = new Date(),
+  settings = DEFAULT_SOURCING_SETTINGS,
 ): SourcingEvaluation {
   const sizes = (market?.sizes ?? [])
-    .map(evaluateSize)
+    .map((size) => evaluateSize(size, settings))
     .sort((left, right) => sizeSortValue(left) - sizeSortValue(right))
   const benchmarks = aggregateBenchmarks(sizes)
   const knownSales = sizes
@@ -146,6 +166,8 @@ export function evaluateSourcingMarket(
       knownSales.length === 0
         ? null
         : knownSales.reduce((total, sales) => total + sales, 0),
+    salesWeightedAveragePrice:
+      market?.summary.salesWeightedAveragePrice ?? null,
     sellingSizeCount: sizes.filter(({ sales30d }) => (sales30d ?? 0) > 0)
       .length,
     totalSizeCount: sizes.length,
@@ -154,6 +176,8 @@ export function evaluateSourcingMarket(
     benchmarkMax: benchmarks.max,
     sizes,
     feePolicyId: POIZON_FEE_POLICY.id,
+    minimumProfitRate: settings.minimumProfitRate,
+    minimumProfitAmount: settings.minimumProfitAmount,
     evaluatedAt: now.toISOString(),
   }
 }
@@ -161,10 +185,12 @@ export function evaluateSourcingMarket(
 export function createEmptySourcingEvaluation(
   status: Extract<SourcingStatus, 'review' | 'not_found' | 'error'>,
   now = new Date(),
+  settings = DEFAULT_SOURCING_SETTINGS,
 ): SourcingEvaluation {
   return {
     status,
     totalSales30d: null,
+    salesWeightedAveragePrice: null,
     sellingSizeCount: 0,
     totalSizeCount: 0,
     benchmarkMin: null,
@@ -172,6 +198,8 @@ export function createEmptySourcingEvaluation(
     benchmarkMax: null,
     sizes: [],
     feePolicyId: POIZON_FEE_POLICY.id,
+    minimumProfitRate: settings.minimumProfitRate,
+    minimumProfitAmount: settings.minimumProfitAmount,
     evaluatedAt: now.toISOString(),
   }
 }
