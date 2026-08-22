@@ -22,6 +22,7 @@ export type SizeSourcingEvaluation = {
   sizes: import('./poizon').PoizonSize[]
   scanned: boolean
   sales30d: number | null
+  averageTransactionPrice?: number | null
   referencePrice: number | null
   listingFee: number | null
   operationFee: number | null
@@ -40,6 +41,7 @@ export type SourcingStatus =
 export type SourcingEvaluation = {
   status: SourcingStatus
   totalSales30d: number | null
+  salesWeightedAveragePrice?: number | null
   sellingSizeCount: number
   totalSizeCount: number
   benchmarkMin: number | null
@@ -47,6 +49,8 @@ export type SourcingEvaluation = {
   benchmarkMax: number | null
   sizes: SizeSourcingEvaluation[]
   feePolicyId: 'jp-prestock-shoes-2026-07-10'
+  minimumProfitRate?: number
+  minimumProfitAmount?: number
   evaluatedAt: string
 }
 

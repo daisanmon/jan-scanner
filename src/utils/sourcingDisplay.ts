@@ -15,7 +15,7 @@ export function getEntryEvaluation(entry: ScanHistoryEntry) {
 
 export function displaySizes(sizes: PoizonSize[]): string {
   const jp = sizes.find(({ system }) => system === 'JP')
-  if (jp) return `${jp.value}cm`
+  if (jp) return `JP ${jp.value}`
   return sizes.length > 0
     ? sizes.map(({ system, value }) => `${system} ${value}`).join(' / ')
     : '—'

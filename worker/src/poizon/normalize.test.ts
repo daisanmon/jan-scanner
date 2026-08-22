@@ -42,6 +42,15 @@ describe('POIZON response normalization', () => {
     )
   })
 
+  it('preserves the official article number as the product model number', () => {
+    const response = structuredClone(barcodeFixture)
+    Reflect.set(response.data.contents[0].spuInfo, 'articleNumber', '1011C084-750')
+
+    const [candidate] = normalizeBarcodeCandidates(response, '4580563378953')
+
+    expect(candidate.articleNumber).toBe('1011C084-750')
+  })
+
   it('falls back to the SPU image when the matching SKU has no image', () => {
     const response = structuredClone(barcodeFixture)
     Reflect.deleteProperty(response.data.contents[0].skuInfoList[0], 'logoUrl')

@@ -81,6 +81,21 @@ describe('POIZON sourcing fees', () => {
     expect(result.transferFee).toBe(201)
     expect(result.purchaseBenchmark && result.purchaseBenchmark % 100).toBe(0)
   })
+
+  it('applies configurable minimum profit rate and amount', () => {
+    expect(
+      calculateSourcingFees(20_000, {
+        minimumProfitRate: 0.25,
+        minimumProfitAmount: 1_000,
+      }).purchaseBenchmark,
+    ).toBe(12_600)
+    expect(
+      calculateSourcingFees(20_000, {
+        minimumProfitRate: 0.1,
+        minimumProfitAmount: 5_000,
+      }).purchaseBenchmark,
+    ).toBe(11_900)
+  })
 })
 
 describe('sourcing aggregation', () => {

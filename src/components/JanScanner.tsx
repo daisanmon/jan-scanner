@@ -14,6 +14,7 @@ type ScannerStatus =
 
 const DUPLICATE_SUPPRESSION_MS = 3_000
 const DUPLICATE_MESSAGE_MS = 1_800
+const SCAN_AREA_INSET = '8%'
 
 type JanScannerProps = {
   onRegister: (janCode: string) => void
@@ -167,10 +168,10 @@ export function JanScanner({ onRegister }: JanScannerProps) {
             height: { ideal: 720 },
           },
           area: {
-            top: '25%',
-            right: '8%',
-            bottom: '25%',
-            left: '8%',
+            top: SCAN_AREA_INSET,
+            right: SCAN_AREA_INSET,
+            bottom: SCAN_AREA_INSET,
+            left: SCAN_AREA_INSET,
           },
           willReadFrequently: true,
         },
@@ -311,7 +312,7 @@ export function JanScanner({ onRegister }: JanScannerProps) {
       </div>
 
       <p className="camera-hint">
-        バーコードを枠の中央に合わせ、端末を動かさずにかざしてください
+        バーコード全体を枠内に収めてください。縦向き・横向きのまま読み取れます
       </p>
 
       <div className={`result-panel ${janCode ? 'has-result' : ''}`}>

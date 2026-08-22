@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ScanHistoryEntry } from '../types/history'
 import { ScanHistory } from './ScanHistory'
@@ -17,6 +17,7 @@ const entry: ScanHistoryEntry = {
     state: 'price_unavailable',
     product: {
       spuId: '1045489',
+      articleNumber: '1011C084-750',
       title: 'Test sneaker',
       brandName: 'Test brand',
       imageUrl: 'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
@@ -29,8 +30,9 @@ const entry: ScanHistoryEntry = {
   sourcing: {
     status: 'candidate',
     totalSales30d: 10,
+    salesWeightedAveragePrice: 10_100,
     sellingSizeCount: 1,
-    totalSizeCount: 1,
+    totalSizeCount: 2,
     benchmarkMin: 20_000,
     benchmarkMedian: 20_000,
     benchmarkMax: 20_000,
@@ -41,12 +43,27 @@ const entry: ScanHistoryEntry = {
         sizes: [{ system: 'JP', value: '28.5' }],
         scanned: true,
         sales30d: 10,
+        averageTransactionPrice: 11_700,
         referencePrice: 30_000,
         listingFee: 2_800,
         operationFee: 1_500,
         transferFee: 2_500,
         estimatedNetProceeds: 23_200,
         purchaseBenchmark: 20_000,
+      },
+      {
+        skuId: '600297002',
+        globalSkuId: '10600297002',
+        sizes: [{ system: 'JP', value: '29' }],
+        scanned: false,
+        sales30d: null,
+        averageTransactionPrice: null,
+        referencePrice: null,
+        listingFee: null,
+        operationFee: null,
+        transferFee: null,
+        estimatedNetProceeds: null,
+        purchaseBenchmark: null,
       },
     ],
     feePolicyId: 'jp-prestock-shoes-2026-07-10',
@@ -62,6 +79,21 @@ describe('product image placements', () => {
       'src',
       'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
     )
+  })
+
+  it('shows the model first and provides compact expandable size statistics', () => {
+    const { container } = render(<CandidateCard entry={entry} />)
+
+    expect(screen.getByRole('heading', { name: '1011C084-750' })).toBeInTheDocument()
+    expect(container.querySelector('.candidate-title-details')).not.toHaveAttribute('open')
+    expect(screen.queryByText(/スキャンサイズ：/)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('全サイズの価格・販売数を見る（2）'))
+
+    expect(screen.getByText('￥10,100')).toBeInTheDocument()
+    expect(screen.getByText('￥11,700')).toBeInTheDocument()
+    expect(screen.getByText('データなし・非表示：1サイズ')).toBeInTheDocument()
+    expect(container.querySelectorAll('.sourcing-size-row')).toHaveLength(1)
   })
 
   it('renders the saved image in scan history', () => {

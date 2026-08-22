@@ -4,7 +4,9 @@ import type {
 } from '../types/history'
 import {
   createEmptySourcingEvaluation,
+  DEFAULT_SOURCING_SETTINGS,
   evaluateSourcingMarket,
+  type SourcingSettings,
 } from './sourcingEvaluation'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,6 +47,8 @@ function isProduct(value: unknown): boolean {
     typeof value.spuId === 'string' &&
     typeof value.title === 'string' &&
     typeof value.brandName === 'string' &&
+    (value.articleNumber === undefined ||
+      typeof value.articleNumber === 'string') &&
     (value.imageUrl === undefined || isHttpsImageUrl(value.imageUrl)) &&
     typeof value.skuId === 'string' &&
     typeof value.globalSkuId === 'string' &&
@@ -133,6 +137,8 @@ function isSourcingSize(value: unknown): boolean {
     value.sizes.every(isSize) &&
     typeof value.scanned === 'boolean' &&
     isNullableNumber(value.sales30d) &&
+    (value.averageTransactionPrice === undefined ||
+      isNullableNumber(value.averageTransactionPrice)) &&
     isNullableNumber(value.referencePrice) &&
     isNullableNumber(value.listingFee) &&
     isNullableNumber(value.operationFee) &&
@@ -149,6 +155,8 @@ export function isSourcingEvaluation(value: unknown): boolean {
       String(value.status),
     ) &&
     isNullableNumber(value.totalSales30d) &&
+    (value.salesWeightedAveragePrice === undefined ||
+      isNullableNumber(value.salesWeightedAveragePrice)) &&
     Number.isInteger(value.sellingSizeCount) &&
     Number.isInteger(value.totalSizeCount) &&
     isNullableNumber(value.benchmarkMin) &&
@@ -157,6 +165,12 @@ export function isSourcingEvaluation(value: unknown): boolean {
     Array.isArray(value.sizes) &&
     value.sizes.every(isSourcingSize) &&
     value.feePolicyId === 'jp-prestock-shoes-2026-07-10' &&
+    (value.minimumProfitRate === undefined ||
+      (typeof value.minimumProfitRate === 'number' &&
+        Number.isFinite(value.minimumProfitRate))) &&
+    (value.minimumProfitAmount === undefined ||
+      (typeof value.minimumProfitAmount === 'number' &&
+        Number.isFinite(value.minimumProfitAmount))) &&
     isDate(value.evaluatedAt)
   )
 }
@@ -198,12 +212,13 @@ export function isPoizonHistorySnapshot(
 export function createPoizonHistorySnapshot(
   response: StorablePoizonLookupResponse,
   now = new Date(),
+  settings: SourcingSettings = DEFAULT_SOURCING_SETTINGS,
 ): PoizonHistorySnapshot {
   if (response.state === 'not_found') {
     return {
       savedAt: now.toISOString(),
       state: 'not_found',
-      sourcing: createEmptySourcingEvaluation('not_found', now),
+      sourcing: createEmptySourcingEvaluation('not_found', now, settings),
     }
   }
 
@@ -213,7 +228,7 @@ export function createPoizonHistorySnapshot(
       state: response.state,
       product: response.product,
       market: response.market,
-      sourcing: evaluateSourcingMarket(response.market, now),
+      sourcing: evaluateSourcingMarket(response.market, now, settings),
     }
   }
 
@@ -223,6 +238,6 @@ export function createPoizonHistorySnapshot(
     product: response.product,
     market: response.market,
     price: response.price,
-    sourcing: evaluateSourcingMarket(response.market, now),
+    sourcing: evaluateSourcingMarket(response.market, now, settings),
   }
 }
