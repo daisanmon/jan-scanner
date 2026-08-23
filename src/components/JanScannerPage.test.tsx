@@ -35,7 +35,21 @@ vi.mock('./PoizonLookupPanel', () => ({
         <>
           <button type="button" onClick={() => onLookupComplete(target, {
             requestId: 'request',
-            state: 'not_found',
+            ...(target.janCode === '4580563378953'
+              ? {
+                  state: 'price_unavailable',
+                  product: {
+                    spuId: '1045489',
+                    articleNumber: 'TEST-001',
+                    title: 'Test sneaker',
+                    brandName: 'Test brand',
+                    skuId: '600297001',
+                    globalSkuId: '10600297001',
+                    janCode: target.janCode,
+                    sizes: [{ system: 'JP', value: '28.5' }],
+                  },
+                }
+              : { state: 'not_found' }),
             cache: { product: false, market: false, price: false },
           })}>complete lookup</button>
           <button type="button" onClick={() => onLookupError(target, 'failed')}>fail lookup</button>
@@ -67,7 +81,8 @@ describe('continuous lookup queue', () => {
     fireEvent.click(screen.getByRole('button', { name: 'complete lookup' }))
 
     fireEvent.click(screen.getByRole('button', { name: /履歴/ }))
-    expect(screen.getAllByText('一致商品なし')).toHaveLength(2)
+    expect(screen.getByText('Test sneaker')).toBeInTheDocument()
+    expect(screen.getByText('一致商品なし')).toBeInTheDocument()
   })
 
   it('merges a repeated successful JAN and allows retry after an error', () => {

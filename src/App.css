@@ -1812,6 +1812,24 @@ footer p + p::before {
   font-weight: 750;
 }
 
+.market-coverage-warning {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(180, 118, 28, 0.18);
+  border-radius: 0.8rem;
+  color: #735012;
+  background: #fff8e8;
+  font-size: 0.62rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.market-coverage-warning p {
+  margin: 0;
+}
+
 .candidate-badge,
 .read-badge,
 .history-status {

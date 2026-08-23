@@ -113,4 +113,29 @@ describe('POIZON API client', () => {
       queryConsignmentPrice('600297001', env, vi.fn(), fetcher),
     ).resolves.toEqual({ globalMinPrice: 33_900, asiaMinPrice: 33_900 })
   })
+
+  it('queries both EAN-13 and UPC-A forms when the JAN starts with zero', async () => {
+    let body: Record<string, unknown> | undefined
+    const response = structuredClone(barcodeFixture)
+    response.data.contents[0].skuInfoList[0].barCode = '194956863434'
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return Response.json(response)
+    }) as typeof fetch
+
+    const candidates = await queryProductsByBarcode(
+      '0194956863434',
+      env,
+      vi.fn(),
+      fetcher,
+    )
+
+    expect(body).toMatchObject({
+      barcodes: ['0194956863434', '194956863434'],
+    })
+    expect(candidates[0]).toMatchObject({
+      janCode: '0194956863434',
+      skuId: '600297001',
+    })
+  })
 })

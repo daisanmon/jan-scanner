@@ -183,16 +183,20 @@ export async function queryProductsByBarcode(
   reserveQuota: QuotaReservation,
   fetcher: Fetcher = fetch,
 ) {
+  const barcodes =
+    janCode.length === 13 && janCode.startsWith('0')
+      ? [janCode, janCode.slice(1)]
+      : [janCode]
   const response = await requestPoizon(
     181,
     API_181_PATH,
-    { barcodes: [janCode], pageNum: 1, pageSize: 100 },
+    { barcodes, pageNum: 1, pageSize: 100 },
     env,
     reserveQuota,
     fetcher,
   )
   try {
-    return normalizeBarcodeCandidates(response, janCode)
+    return normalizeBarcodeCandidates(response, janCode, barcodes)
   } catch {
     const envelope = readPoizonEnvelope(response)
     throw new PoizonUpstreamError('bad_response', 181, 200, envelope.code, envelope.traceId)

@@ -103,7 +103,10 @@ export function ScanHistory({
                   </button>
                 )}
                 {evaluation && evaluation.sizes.length > 0 && (
-                  <SizeEvaluationDetails evaluation={evaluation} />
+                  <SizeEvaluationDetails
+                    evaluation={evaluation}
+                    warnings={entry.poizon?.market?.warnings}
+                  />
                 )}
               </li>
               )

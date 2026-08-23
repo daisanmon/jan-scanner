@@ -133,6 +133,21 @@ describe('sourcing aggregation', () => {
 })
 
 describe('candidate decisions', () => {
+  it('caps the sourcing calculation at the 30-day average transaction price', () => {
+    const riskySize = size(2, 28_100, true)
+    riskySize.averageTransactionPrice = 14_746
+
+    const result = evaluateSourcingMarket(market([riskySize]))
+
+    expect(result.sizes[0]).toMatchObject({
+      referencePrice: 28_100,
+      averageTransactionPrice: 14_746,
+      calculationBasisPrice: 14_746,
+      purchaseBenchmark: 10_100,
+    })
+    expect(result.feePolicyId).toBe('jp-prestock-shoes-2026-08-23-average-cap')
+  })
+
   it('keeps a product when the scanned or another size has sales', () => {
     expect(determineCandidateStatus([size(1, 20_000, true)])).toBe('candidate')
     expect(determineCandidateStatus([size(0, 20_000, true), size(1)])).toBe(

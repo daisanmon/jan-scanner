@@ -29,7 +29,8 @@ describe('browser session token', () => {
   it('rejects tampering and tokens issued for another hostname', async () => {
     const now = Date.UTC(2026, 7, 5, 0, 0, 0)
     const session = await issueBrowserSession(env, now)
-    const tampered = `${session.token.slice(0, -1)}x`
+    const replacement = session.token.endsWith('A') ? 'B' : 'A'
+    const tampered = `${session.token.slice(0, -1)}${replacement}`
 
     await expect(validateBrowserSession(tampered, env, now)).resolves.toBe(false)
     await expect(

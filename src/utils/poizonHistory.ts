@@ -140,6 +140,8 @@ function isSourcingSize(value: unknown): boolean {
     (value.averageTransactionPrice === undefined ||
       isNullableNumber(value.averageTransactionPrice)) &&
     isNullableNumber(value.referencePrice) &&
+    (value.calculationBasisPrice === undefined ||
+      isNullableNumber(value.calculationBasisPrice)) &&
     isNullableNumber(value.listingFee) &&
     isNullableNumber(value.operationFee) &&
     isNullableNumber(value.transferFee) &&
@@ -164,7 +166,9 @@ export function isSourcingEvaluation(value: unknown): boolean {
     isNullableNumber(value.benchmarkMax) &&
     Array.isArray(value.sizes) &&
     value.sizes.every(isSourcingSize) &&
-    value.feePolicyId === 'jp-prestock-shoes-2026-07-10' &&
+    ['jp-prestock-shoes-2026-07-10', 'jp-prestock-shoes-2026-08-23-average-cap'].includes(
+      String(value.feePolicyId),
+    ) &&
     (value.minimumProfitRate === undefined ||
       (typeof value.minimumProfitRate === 'number' &&
         Number.isFinite(value.minimumProfitRate))) &&

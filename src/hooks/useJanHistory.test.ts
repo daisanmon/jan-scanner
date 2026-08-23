@@ -146,6 +146,33 @@ describe('useJanHistory', () => {
     })
   })
 
+  it('retries not-found and model-number-missing entries when scanned again', () => {
+    const { result } = renderHook(() => useJanHistory())
+    let notFoundId = ''
+    let missingModelId = ''
+
+    act(() => {
+      notFoundId = result.current.addEntry('0194956863434', 'camera')
+      result.current.savePoizonResult(notFoundId, {
+        requestId: 'not-found',
+        state: 'not_found',
+        cache: { product: false, market: false, price: false },
+      })
+      missingModelId = result.current.addEntry('4580563378953', 'camera')
+      result.current.savePoizonResult(missingModelId, resolvedResponse)
+    })
+
+    let notFoundRegistration: ReturnType<typeof result.current.registerScan> | undefined
+    let missingModelRegistration: ReturnType<typeof result.current.registerScan> | undefined
+    act(() => {
+      notFoundRegistration = result.current.registerScan('0194956863434', 'camera')
+      missingModelRegistration = result.current.registerScan('4580563378953', 'camera')
+    })
+
+    expect(notFoundRegistration).toMatchObject({ id: notFoundId, shouldLookup: true })
+    expect(missingModelRegistration).toMatchObject({ id: missingModelId, shouldLookup: true })
+  })
+
   it('recalculates saved candidates when the sourcing settings change', async () => {
     const { result, rerender } = renderHook(
       ({ settings }) => useJanHistory(settings),

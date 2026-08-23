@@ -3,6 +3,7 @@ import type {
   SizeSourcingEvaluation,
   SourcingEvaluation,
 } from '../types/history'
+import type { PoizonMarketWarning } from '../types/poizon'
 import { displaySizes, getEntryEvaluation } from '../utils/sourcingDisplay'
 import { ProductImage } from './ProductImage'
 
@@ -25,6 +26,7 @@ function hasMarketValue(size: SizeSourcingEvaluation) {
     size.sales30d,
     size.averageTransactionPrice,
     size.referencePrice,
+    size.calculationBasisPrice,
     size.purchaseBenchmark,
   ].some((value) => value !== null && value !== undefined)
 }
@@ -40,6 +42,7 @@ function SizeEvaluationRow({ size }: { size: SizeSourcingEvaluation }) {
         <div><dt>30日販売数</dt><dd>{formatSales(size.sales30d)}</dd></div>
         <div><dt>30日平均成約価格</dt><dd>{formatPrice(size.averageTransactionPrice ?? null)}</dd></div>
         <div><dt>POIZON参考価格</dt><dd>{formatPrice(size.referencePrice)}</dd></div>
+        <div><dt>仕入れ計算基準価格</dt><dd>{formatPrice(size.calculationBasisPrice ?? size.referencePrice)}</dd></div>
         <div><dt>概算仕入れ基準価格</dt><dd>{formatPrice(size.purchaseBenchmark)}</dd></div>
       </dl>
     </li>
@@ -48,11 +51,14 @@ function SizeEvaluationRow({ size }: { size: SizeSourcingEvaluation }) {
 
 export function SizeEvaluationDetails({
   evaluation,
+  warnings = [],
 }: {
   evaluation: SourcingEvaluation
+  warnings?: PoizonMarketWarning[]
 }) {
   const visibleSizes = evaluation.sizes.filter(hasMarketValue)
   const unavailableSizes = evaluation.sizes.filter((size) => !hasMarketValue(size))
+  const salesPartial = warnings.includes('SALES_PARTIAL')
 
   return (
     <details className="sourcing-size-details">
@@ -60,7 +66,7 @@ export function SizeEvaluationDetails({
       <div className="sourcing-overall-row">
         <strong>全体</strong>
         <dl>
-          <div><dt>30日販売数</dt><dd>{formatSales(evaluation.totalSales30d)}</dd></div>
+          <div><dt>{salesPartial ? '30日販売数（取得済み範囲）' : '30日販売数'}</dt><dd>{formatSales(evaluation.totalSales30d)}</dd></div>
           <div><dt>30日平均成約価格</dt><dd>{formatPrice(evaluation.salesWeightedAveragePrice ?? null)}</dd></div>
         </dl>
         <small>平均成約価格は販売数による加重平均</small>
@@ -83,7 +89,7 @@ export function SizeEvaluationDetails({
         </details>
       )}
       <p className="estimate-note">
-        参考価格と保存時点の手数料ポリシーから求めた概算です。利益を保証するものではありません。
+        POIZON参考価格と30日平均成約価格の低い方を基準に、保存時点の手数料ポリシーから求めた概算です。利益を保証するものではありません。
       </p>
     </details>
   )
@@ -93,7 +99,9 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
   const evaluation = getEntryEvaluation(entry)
   if (!evaluation) return null
   const product = entry.poizon?.product
-  const scanCount = entry.aggregation?.scanCount ?? 1
+  const marketWarnings = entry.poizon?.market?.warnings ?? []
+  const salesPartial = marketWarnings.includes('SALES_PARTIAL')
+  const pricePartial = marketWarnings.includes('PRICE_PARTIAL')
 
   return (
     <article className="candidate-card">
@@ -113,12 +121,17 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
         </div>
         <div className="candidate-heading-aside">
           <span className="candidate-badge">候補</span>
-          <small>{scanCount}回</small>
         </div>
       </div>
+      {(salesPartial || pricePartial) && (
+        <div className="market-coverage-warning" role="status">
+          {salesPartial && <p>一部サイズの販売数が未取得です。合計は取得済み範囲です。</p>}
+          {pricePartial && <p>一部サイズのPOIZON参考価格が未取得です。</p>}
+        </div>
+      )}
       <div className="candidate-primary-summary">
         <div className="candidate-sales-summary">
-          <span>全サイズ・30日販売数</span>
+          <span>{salesPartial ? '取得済みサイズ・30日販売数' : '全サイズ・30日販売数'}</span>
           <strong>{formatSales(evaluation.totalSales30d)}</strong>
           <small>{evaluation.sellingSizeCount}/{evaluation.totalSizeCount}サイズで販売実績</small>
         </div>
@@ -134,7 +147,7 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
           )}
         </div>
       </div>
-      <SizeEvaluationDetails evaluation={evaluation} />
+      <SizeEvaluationDetails evaluation={evaluation} warnings={marketWarnings} />
     </article>
   )
 }
