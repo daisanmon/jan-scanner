@@ -39,7 +39,7 @@ describe('application layout', () => {
     fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
 
     expect(screen.getByRole('status')).toHaveTextContent(
-      '仕入れ基準を保存し、候補を再計算しました。',
+      '仕入れ基準を保存し、仕入れ基準価格を再計算しました。',
     )
     await waitFor(() => {
       expect(

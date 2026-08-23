@@ -156,6 +156,27 @@ describe('POIZON response normalization', () => {
     ])
   })
 
+  it('matches a 12-digit UPC alias and ignores empty-barcode sibling SKUs', () => {
+    const response = structuredClone(barcodeFixture)
+    response.data.contents[0].skuInfoList[0].barCode = '194956863434'
+    response.data.contents[0].skuInfoList[0].skuId = 600297010
+    response.data.contents[0].skuInfoList[0].globalSkuId = 10600297010
+    response.data.contents[0].skuInfoList[1].barCode = ''
+
+    const candidates = normalizeBarcodeCandidates(
+      response,
+      '0194956863434',
+      ['0194956863434', '194956863434'],
+    )
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({
+      skuId: '600297010',
+      globalSkuId: '10600297010',
+      janCode: '0194956863434',
+    })
+  })
+
   it('normalizes the confirmed API 93 prices', () => {
     expect(
       normalizePrice({
@@ -199,6 +220,33 @@ describe('POIZON response normalization', () => {
       localSoldNum30: null,
       averageTransactionPrice: null,
     })
+  })
+
+  it('drops POIZON fallback SKUs whose size systems all contain the same prefixed value', () => {
+    const response = structuredClone(marketFixture)
+    response.data[0].skuInfoList.push({
+      skuId: 600297004,
+      globalSkuId: 10600297004,
+      regionSalePvInfoList: [
+        {
+          sizeInfos: [
+            { sizeKey: 'JP', value: 'EU 220' },
+            { sizeKey: 'EU', value: 'EU 220' },
+            { sizeKey: 'US Men', value: 'EU 220' },
+          ],
+        },
+      ],
+      commoditySales: {},
+      averagePrice: {},
+    })
+
+    const market = normalizeMarketProduct(response, '1045489')
+
+    expect(market.skus.map(({ skuId }) => skuId)).toEqual([
+      '600297001',
+      '600297002',
+      '600297003',
+    ])
   })
 
   it('normalizes an unordered API 141 batch and preserves missing prices', () => {

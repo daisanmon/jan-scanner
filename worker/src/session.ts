@@ -27,7 +27,8 @@ function base64UrlToBytes(value: string): Uint8Array | null {
     const padded = value.replaceAll('-', '+').replaceAll('_', '/')
       .padEnd(Math.ceil(value.length / 4) * 4, '=')
     const binary = atob(padded)
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return bytesToBase64Url(bytes) === value ? bytes : null
   } catch {
     return null
   }
@@ -115,7 +116,7 @@ export async function validateBrowserSession(
 
   const nonce = base64UrlToBytes(parts[2])
   const signature = base64UrlToBytes(parts[3])
-  if (!nonce || nonce.byteLength !== 16 || !signature) {
+  if (!nonce || nonce.byteLength !== 16 || !signature || signature.byteLength !== 32) {
     return false
   }
 

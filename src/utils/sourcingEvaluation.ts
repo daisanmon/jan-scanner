@@ -6,7 +6,7 @@ import type {
 import type { PoizonMarketData, PoizonSizeMarketData } from '../types/poizon'
 
 export const POIZON_FEE_POLICY = {
-  id: 'jp-prestock-shoes-2026-07-10',
+  id: 'jp-prestock-shoes-2026-08-23-average-cap',
   listingFeeRate: 0.05,
   listingFeeMin: 700,
   listingFeeMax: 4_230,
@@ -82,10 +82,15 @@ function evaluateSize(
   size: PoizonSizeMarketData,
   settings: SourcingSettings,
 ): SizeSourcingEvaluation {
-  const fees =
-    size.asiaMinPrice === null
-      ? null
-      : calculateSourcingFees(size.asiaMinPrice, settings)
+  const availableSalePrices = [
+    size.asiaMinPrice,
+    size.averageTransactionPrice,
+  ].filter((value): value is number => value !== null && value > 0)
+  const calculationBasisPrice =
+    availableSalePrices.length > 0 ? Math.min(...availableSalePrices) : null
+  const fees = calculationBasisPrice === null
+    ? null
+    : calculateSourcingFees(calculationBasisPrice, settings)
 
   return {
     skuId: size.skuId,
@@ -95,6 +100,7 @@ function evaluateSize(
     sales30d: size.globalSoldNum30,
     averageTransactionPrice: size.averageTransactionPrice,
     referencePrice: size.asiaMinPrice,
+    calculationBasisPrice,
     listingFee: fees?.listingFee ?? null,
     operationFee: fees?.operationFee ?? null,
     transferFee: fees?.transferFee ?? null,

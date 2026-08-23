@@ -27,7 +27,8 @@ const NEGATIVE_PRODUCT_TTL_MS = 10 * 60 * 1_000
 const MARKET_TTL_MS = 15 * 60 * 1_000
 const PRICE_TTL_MS = 2 * 60 * 1_000
 const MINIMUM_UPSTREAM_INTERVAL_MS = 250
-const PRODUCT_CACHE_NAMESPACE = 'product:v3'
+// v5 invalidates snapshots cached before articleNumber and UPC-A fallback support.
+const PRODUCT_CACHE_NAMESPACE = 'product:v5'
 const MARKET_CACHE_NAMESPACE = 'market:v1'
 const PRICE_BATCH_CACHE_NAMESPACE = 'price-batch:v1'
 const LEGACY_PRICE_CACHE_NAMESPACE = 'price:v2'

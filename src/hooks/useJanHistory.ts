@@ -13,6 +13,7 @@ import {
   createEmptySourcingEvaluation,
   DEFAULT_SOURCING_SETTINGS,
   evaluateSourcingMarket,
+  POIZON_FEE_POLICY,
   type SourcingSettings,
 } from '../utils/sourcingEvaluation'
 
@@ -112,7 +113,8 @@ export function useJanHistory(
         const evaluation = entry.sourcing ?? entry.poizon.sourcing
         if (
           evaluation?.minimumProfitRate === sourcingSettings.minimumProfitRate &&
-          evaluation.minimumProfitAmount === sourcingSettings.minimumProfitAmount
+          evaluation.minimumProfitAmount === sourcingSettings.minimumProfitAmount &&
+          evaluation.feePolicyId === POIZON_FEE_POLICY.id
         ) {
           return entry
         }
@@ -146,7 +148,9 @@ export function useJanHistory(
         }
         const shouldLookup =
           existing.lookupStatus === 'error' ||
-          (!existing.poizon && existing.lookupStatus !== 'pending')
+          (!existing.poizon && existing.lookupStatus !== 'pending') ||
+          existing.poizon?.state === 'not_found' ||
+          Boolean(existing.poizon?.product && !existing.poizon.product.articleNumber)
         const updated: ScanHistoryEntry = {
           ...existing,
           readAt: now,

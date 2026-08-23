@@ -12,9 +12,11 @@ type ScannerStatus =
   | 'stopped'
   | 'error'
 
-const DUPLICATE_SUPPRESSION_MS = 3_000
 const DUPLICATE_MESSAGE_MS = 1_800
 const SCAN_AREA_INSET = '8%'
+const CAMERA_JAN_PATTERN = /^[0-9]{13}$/
+const DETECTION_CONFIRMATION_COUNT = 2
+const DETECTION_CONFIRMATION_WINDOW_MS = 1_000
 
 type JanScannerProps = {
   onRegister: (janCode: string) => void
@@ -85,9 +87,12 @@ export function JanScanner({ onRegister }: JanScannerProps) {
   const duplicateMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   )
-  const lastDetectionRef = useRef<{ code: string; detectedAt: number } | null>(
-    null,
-  )
+  const detectionCandidateRef = useRef<{
+    code: string
+    count: number
+    lastSeenAt: number
+  } | null>(null)
+  const confirmedCodesRef = useRef(new Set<string>())
 
   const handleDetected = useCallback(
     function detectedHandler(result: QuaggaJSResultObject) {
@@ -96,17 +101,17 @@ export function JanScanner({ onRegister }: JanScannerProps) {
       }
 
       const code = result.codeResult?.code
-      if (!code || !isValidJanCode(code)) {
+      if (
+        !code ||
+        !CAMERA_JAN_PATTERN.test(code) ||
+        !isValidJanCode(code)
+      ) {
         return
       }
 
       const now = Date.now()
-      const lastDetection = lastDetectionRef.current
-      if (
-        lastDetection?.code === code &&
-        now - lastDetection.detectedAt < DUPLICATE_SUPPRESSION_MS
-      ) {
-        setDuplicateMessage('同じJANコードのため、重複登録を防止しました。')
+      if (confirmedCodesRef.current.has(code)) {
+        setDuplicateMessage('この読み取り中に登録済みのJANコードです。')
         if (duplicateMessageTimerRef.current === null) {
           duplicateMessageTimerRef.current = setTimeout(() => {
             duplicateMessageTimerRef.current = null
@@ -118,7 +123,19 @@ export function JanScanner({ onRegister }: JanScannerProps) {
         return
       }
 
-      lastDetectionRef.current = { code, detectedAt: now }
+      const candidate = detectionCandidateRef.current
+      const count =
+        candidate?.code === code &&
+        now - candidate.lastSeenAt <= DETECTION_CONFIRMATION_WINDOW_MS
+          ? candidate.count + 1
+          : 1
+      detectionCandidateRef.current = { code, count, lastSeenAt: now }
+      if (count < DETECTION_CONFIRMATION_COUNT) {
+        return
+      }
+
+      detectionCandidateRef.current = null
+      confirmedCodesRef.current.add(code)
       if (duplicateMessageTimerRef.current !== null) {
         clearTimeout(duplicateMessageTimerRef.current)
         duplicateMessageTimerRef.current = null
@@ -138,6 +155,8 @@ export function JanScanner({ onRegister }: JanScannerProps) {
     }
 
     sessionRef.current = true
+    detectionCandidateRef.current = null
+    confirmedCodesRef.current.clear()
     const sessionId = sessionIdRef.current + 1
     sessionIdRef.current = sessionId
     setErrorMessage(null)
@@ -176,7 +195,7 @@ export function JanScanner({ onRegister }: JanScannerProps) {
           willReadFrequently: true,
         },
         decoder: {
-          readers: ['ean_reader', 'ean_8_reader'],
+          readers: ['ean_reader'],
           multiple: false,
         },
         locator: {
@@ -323,7 +342,7 @@ export function JanScanner({ onRegister }: JanScannerProps) {
         <p className="result-detail">
           {janCode
             ? `${janCode.length}桁・チェックデジット確認済み`
-            : '8桁または13桁のJANコードに対応'}
+            : 'カメラは13桁JANに対応（8桁は手入力）'}
         </p>
       </div>
 

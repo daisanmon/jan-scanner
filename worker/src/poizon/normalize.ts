@@ -93,8 +93,22 @@ function normalizeSizes(sku: Record<string, unknown>): PoizonSize[] {
     }
   }
 
+  const normalized = Array.from(sizes, ([system, value]) => ({ system, value }))
+  const uniqueValues = new Set(normalized.map(({ value }) => value))
+  const onlyValue = uniqueValues.size === 1 ? normalized[0]?.value : undefined
+
+  // POIZON occasionally returns fallback rows such as JP="EU 220", EU="EU 220",
+  // US Men="EU 220". They are not real size conversions and must not inflate totals.
+  if (
+    normalized.length >= 2 &&
+    onlyValue !== undefined &&
+    /^(?:JP|EU|US|UK|CN|KR)\s+\S+/i.test(onlyValue)
+  ) {
+    return []
+  }
+
   const preferredOrder = ['JP', 'EU', 'US', 'US Men', 'US Women', 'UK', 'CN', 'KR']
-  return Array.from(sizes, ([system, value]) => ({ system, value })).sort((left, right) => {
+  return normalized.sort((left, right) => {
     const leftIndex = preferredOrder.indexOf(left.system)
     const rightIndex = preferredOrder.indexOf(right.system)
     const normalizedLeft = leftIndex === -1 ? preferredOrder.length : leftIndex
@@ -106,6 +120,7 @@ function normalizeSizes(sku: Record<string, unknown>): PoizonSize[] {
 export function normalizeBarcodeCandidates(
   response: unknown,
   janCode: string,
+  acceptedBarcodes: readonly string[] = [janCode],
 ): PoizonProductCandidate[] {
   if (!isRecord(response) || Number(response.code) !== 200 || !isRecord(response.data)) {
     throw new Error('Invalid API 181 response')
@@ -113,6 +128,7 @@ export function normalizeBarcodeCandidates(
 
   const contents = Array.isArray(response.data.contents) ? response.data.contents : []
   const candidates = new Map<string, PoizonProductCandidate>()
+  const acceptedBarcodeSet = new Set(acceptedBarcodes)
 
   for (const content of contents) {
     if (!isRecord(content)) {
@@ -128,18 +144,20 @@ export function normalizeBarcodeCandidates(
       continue
     }
 
-    for (const rawSku of skuList) {
-      if (!isRecord(rawSku)) {
-        continue
-      }
+    const validSkus = skuList.filter((rawSku): rawSku is Record<string, unknown> => {
+      if (!isRecord(rawSku)) return false
       const rawBarcode = rawSku.barCode
-      if (rawBarcode !== undefined && rawBarcode !== null && typeof rawBarcode !== 'string') {
-        continue
-      }
-      const returnedBarcode = typeof rawBarcode === 'string' ? rawBarcode.trim() : ''
-      if (returnedBarcode && returnedBarcode !== janCode) {
-        continue
-      }
+      return rawBarcode === undefined || rawBarcode === null || typeof rawBarcode === 'string'
+    })
+    const explicitlyMatchingSkus = validSkus.filter((rawSku) => {
+      const returnedBarcode = stringValue(rawSku.barCode).trim()
+      return returnedBarcode !== '' && acceptedBarcodeSet.has(returnedBarcode)
+    })
+    const selectedSkus = explicitlyMatchingSkus.length > 0
+      ? explicitlyMatchingSkus
+      : validSkus.filter((rawSku) => stringValue(rawSku.barCode).trim() === '')
+
+    for (const rawSku of selectedSkus) {
       const skuId = stringId(rawSku.skuId)
       const globalSkuId = stringId(rawSku.globalSkuId)
       if (!skuId || !globalSkuId) {
@@ -227,10 +245,15 @@ export function normalizeMarketProduct(
     const averagePrice = isRecord(rawSku.averagePrice) ? rawSku.averagePrice : {}
     const averageTransactionPrice = nestedInteger(averagePrice, 'globalAveragePrice')
 
+    const sizes = normalizeSizes(rawSku)
+    if (sizes.length === 0) {
+      continue
+    }
+
     skus.push({
       skuId,
       globalSkuId,
-      sizes: normalizeSizes(rawSku),
+      sizes,
       globalSoldNum30: integerValue(sales.globalSoldNum30),
       localSoldNum30: integerValue(sales.localSoldNum30),
       globalMonthToMonthRatio: finiteNumber(sales.globalMonthToMonthRatio),

@@ -24,6 +24,7 @@ export type SizeSourcingEvaluation = {
   sales30d: number | null
   averageTransactionPrice?: number | null
   referencePrice: number | null
+  calculationBasisPrice?: number | null
   listingFee: number | null
   operationFee: number | null
   transferFee: number | null
@@ -48,7 +49,9 @@ export type SourcingEvaluation = {
   benchmarkMedian: number | null
   benchmarkMax: number | null
   sizes: SizeSourcingEvaluation[]
-  feePolicyId: 'jp-prestock-shoes-2026-07-10'
+  feePolicyId:
+    | 'jp-prestock-shoes-2026-07-10'
+    | 'jp-prestock-shoes-2026-08-23-average-cap'
   minimumProfitRate?: number
   minimumProfitAmount?: number
   evaluatedAt: string

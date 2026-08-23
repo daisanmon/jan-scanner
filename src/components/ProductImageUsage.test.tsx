@@ -96,6 +96,39 @@ describe('product image placements', () => {
     expect(container.querySelectorAll('.sourcing-size-row')).toHaveLength(1)
   })
 
+  it('labels partial market totals instead of presenting them as complete', () => {
+    const partialEntry: ScanHistoryEntry = {
+      ...entry,
+      poizon: {
+        ...entry.poizon!,
+        market: {
+          summary: {
+            currency: 'JPY',
+            globalSoldNum30Total: 10,
+            referencePrice: { min: 30_000, median: 30_000, max: 30_000, reportedSizeCount: 1, totalSizeCount: 2 },
+            salesPerSize: { min: 10, median: 10, max: 10, reportedSizeCount: 1, totalSizeCount: 2 },
+            salesWeightedAveragePrice: 10_100,
+            bestSellingSkuId: '600297001',
+          },
+          sizes: [],
+          marketDataAsOf: '2026-08-05T00:01:00.000Z',
+          priceDataAsOf: '2026-08-05T00:01:00.000Z',
+          warnings: ['SALES_PARTIAL', 'PRICE_PARTIAL'],
+        },
+      },
+    }
+
+    render(<CandidateCard entry={partialEntry} />)
+
+    expect(screen.getByText('取得済みサイズ・30日販売数')).toBeInTheDocument()
+    expect(
+      screen.getByText('一部サイズの販売数が未取得です。合計は取得済み範囲です。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('一部サイズのPOIZON参考価格が未取得です。'),
+    ).toBeInTheDocument()
+  })
+
   it('renders the saved image in scan history', () => {
     const { container } = render(
       <ScanHistory history={[entry]} onDelete={() => undefined} onClear={() => undefined} />,
