@@ -5,7 +5,11 @@ import type {
 } from '../types/poizon'
 
 export type PoizonLookupInput = {
-  janCode: string
+  janCode?: string
+  articleNumber?: string
+  brandName?: string
+  alpenProductId?: string
+  alpenUrl?: string
   selectedSpuId?: string
   turnstileToken?: string
 }

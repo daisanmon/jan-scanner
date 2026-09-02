@@ -3,6 +3,9 @@ import { errorResponse, jsonResponse } from './contracts'
 import type { WorkerEnv } from './env'
 import { ApiError } from './errors'
 import { isValidJanCode } from './jan'
+import { extractAlpenProductId } from '../../shared/alpen'
+import type { PoizonLookupContext } from '../../shared/poizon'
+import { fetchAlpenProduct } from './alpen'
 import {
   issueBrowserSession,
   SESSION_EXPIRES_HEADER,
@@ -15,6 +18,7 @@ export { PoizonGateway } from './gateway'
 
 const MAX_REQUEST_BYTES = 4_096
 const POIZON_ID_PATTERN = /^\d{1,16}$/
+const ARTICLE_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} ._+\-/]{0,99}$/u
 
 function allowedOrigins(env: WorkerEnv): Set<string> {
   return new Set(
@@ -89,8 +93,33 @@ async function parseLookupRequest(request: Request): Promise<LookupRequest> {
   }
 
   const record = input as Record<string, unknown>
-  if (typeof record.janCode !== 'string' || !isValidJanCode(record.janCode)) {
+  const hasJan = record.janCode !== undefined
+  const hasArticle = record.articleNumber !== undefined
+  const hasAlpen = record.alpenProductId !== undefined || record.alpenUrl !== undefined
+  if ([hasJan, hasArticle, hasAlpen].filter(Boolean).length !== 1) {
+    throw new ApiError(400, 'INVALID_REQUEST', '検索対象を1つだけ指定してください。', false)
+  }
+  if (hasJan && (typeof record.janCode !== 'string' || !isValidJanCode(record.janCode))) {
     throw new ApiError(400, 'INVALID_JAN', '有効なJANコードを指定してください。', false)
+  }
+  if (hasArticle && (
+    typeof record.articleNumber !== 'string' ||
+    !ARTICLE_PATTERN.test(record.articleNumber.trim())
+  )) {
+    throw new ApiError(400, 'INVALID_ARTICLE', '有効なメーカー型番を指定してください。', false)
+  }
+  if (record.brandName !== undefined && (
+    typeof record.brandName !== 'string' || record.brandName.trim().length > 100
+  )) {
+    throw new ApiError(400, 'INVALID_ARTICLE', 'ブランド名が正しくありません。', false)
+  }
+  if (hasAlpen) {
+    const rawAlpen = typeof record.alpenProductId === 'string'
+      ? record.alpenProductId
+      : typeof record.alpenUrl === 'string' ? record.alpenUrl : ''
+    if (!extractAlpenProductId(rawAlpen)) {
+      throw new ApiError(400, 'INVALID_ALPEN_PRODUCT', '対応するAlpen商品URLまたは商品番号を指定してください。', false)
+    }
   }
   if (record.turnstileToken !== undefined) {
     if (
@@ -120,10 +149,40 @@ async function parseLookupRequest(request: Request): Promise<LookupRequest> {
   }
 
   return {
-    janCode: record.janCode,
+    ...(hasJan ? { janCode: record.janCode as string } : {}),
+    ...(hasArticle ? { articleNumber: (record.articleNumber as string).trim() } : {}),
+    ...(typeof record.brandName === 'string' && record.brandName.trim()
+      ? { brandName: record.brandName.trim() }
+      : {}),
+    ...(typeof record.alpenProductId === 'string' ? { alpenProductId: record.alpenProductId } : {}),
+    ...(typeof record.alpenUrl === 'string' ? { alpenUrl: record.alpenUrl } : {}),
     selectedSpuId: record.selectedSpuId as string | undefined,
     selectedSkuId: record.selectedSkuId as string | undefined,
     turnstileToken: record.turnstileToken as string | undefined,
+  }
+}
+
+async function resolveLookup(input: LookupRequest): Promise<PoizonLookupContext> {
+  if (input.janCode) return { kind: 'jan', janCode: input.janCode }
+  if (input.articleNumber) {
+    return {
+      kind: 'article',
+      articleNumber: input.articleNumber,
+      ...(input.brandName ? { brandName: input.brandName } : {}),
+    }
+  }
+  const rawAlpen = input.alpenProductId ?? input.alpenUrl ?? ''
+  const productId = extractAlpenProductId(rawAlpen)
+  if (!productId) {
+    throw new ApiError(400, 'INVALID_ALPEN_PRODUCT', '対応するAlpen商品を特定できません。', false)
+  }
+  const product = await fetchAlpenProduct(productId)
+  return {
+    kind: 'article',
+    articleNumber: product.articleNumber,
+    ...(product.brandName ? { brandName: product.brandName } : {}),
+    alpenProductId: productId,
+    alpenUrl: product.url,
   }
 }
 
@@ -171,9 +230,11 @@ async function handleRequest(
     issuedSession = await issueBrowserSession(env)
   }
 
+  const lookup = await resolveLookup(input)
   const gatewayInput: GatewayLookupRequest = {
     requestId,
-    janCode: input.janCode,
+    lookup,
+    ...(lookup.kind === 'jan' ? { janCode: lookup.janCode } : {}),
     selectedSpuId: input.selectedSpuId,
     selectedSkuId: input.selectedSkuId,
   }

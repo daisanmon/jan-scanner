@@ -7,6 +7,18 @@ import type {
 
 export type RegistrationMethod = 'camera' | 'manual'
 
+export type ProductLookup =
+  | { kind: 'jan'; janCode: string }
+  | {
+      kind: 'alpen'
+      alpenProductId: string
+      alpenUrl?: string
+      articleNumber?: string
+      brandName?: string
+      selectedSpuId?: string
+    }
+  | { kind: 'article'; articleNumber: string; brandName?: string; selectedSpuId?: string }
+
 export type PoizonHistorySnapshot = {
   savedAt: string
   state: 'resolved' | 'price_unavailable' | 'not_found'
@@ -16,6 +28,29 @@ export type PoizonHistorySnapshot = {
   sourcing?: SourcingEvaluation
 }
 
+export type SizePriceHistory = {
+  skuId: string
+  globalSkuId: string
+  sizes: import('./poizon').PoizonSize[]
+  sales30d: number | null
+  averageTransactionPrice: number | null
+  chinaDisplayablePrice: number | null
+  currentMinimumListingPrice: number | null
+  recommendedPrice: number | null
+  estimatedIncome: number | null
+  purchaseBenchmark: number | null
+}
+
+export type PriceHistorySnapshot = {
+  savedAt: string
+  marketDataAsOf: string | null
+  priceDataAsOf: string | null
+  feePolicyId: SourcingEvaluation['feePolicyId']
+  minimumProfitRate: number
+  minimumProfitAmount: number
+  sizes: SizePriceHistory[]
+}
+
 export type SizeSourcingEvaluation = {
   skuId: string
   globalSkuId: string
@@ -23,12 +58,16 @@ export type SizeSourcingEvaluation = {
   scanned: boolean
   sales30d: number | null
   averageTransactionPrice?: number | null
+  chinaDisplayablePrice?: number | null
+  currentMinimumListingPrice?: number | null
+  recommendedPrice?: number | null
   referencePrice: number | null
   calculationBasisPrice?: number | null
   listingFee: number | null
   operationFee: number | null
   transferFee: number | null
   estimatedNetProceeds: number | null
+  estimatedIncome?: number | null
   purchaseBenchmark: number | null
 }
 
@@ -52,6 +91,11 @@ export type SourcingEvaluation = {
   feePolicyId:
     | 'jp-prestock-shoes-2026-07-10'
     | 'jp-prestock-shoes-2026-08-23-average-cap'
+    | 'jp-prestock-shoes-2026-08-28-displayable-price'
+  feePolicyVerifiedAt?: string
+  feePolicyValidUntil?: string
+  feePolicyExpired?: boolean
+  feePolicyApplicable?: boolean
   minimumProfitRate?: number
   minimumProfitAmount?: number
   evaluatedAt: string
@@ -70,14 +114,18 @@ export type StorablePoizonLookupResponse = Exclude<
 
 export type ScanHistoryEntry = {
   id: string
-  janCode: string
+  /** Kept for backwards-compatible history imports. New entries also carry lookup. */
+  janCode?: string
+  lookup?: ProductLookup
   readAt: string
   method: RegistrationMethod
   poizon?: PoizonHistorySnapshot
+  priceHistory?: PriceHistorySnapshot[]
   sourcing?: SourcingEvaluation
   aggregation?: ScanAggregation
   lookupStatus?: 'pending' | 'complete' | 'error'
   lookupError?: string
+  selectionCandidates?: import('./poizon').PoizonProductCandidate[]
 }
 
 export type StoredScanHistory = {

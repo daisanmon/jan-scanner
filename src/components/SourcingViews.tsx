@@ -21,6 +21,15 @@ function formatSales(value: number | null) {
   return value === null ? '—' : `${value}件`
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 function hasMarketValue(size: SizeSourcingEvaluation) {
   return [
     size.sales30d,
@@ -41,9 +50,11 @@ function SizeEvaluationRow({ size }: { size: SizeSourcingEvaluation }) {
       <dl>
         <div><dt>30日販売数</dt><dd>{formatSales(size.sales30d)}</dd></div>
         <div><dt>30日平均成約価格</dt><dd>{formatPrice(size.averageTransactionPrice ?? null)}</dd></div>
-        <div><dt>POIZON参考価格</dt><dd>{formatPrice(size.referencePrice)}</dd></div>
-        <div><dt>仕入れ計算基準価格</dt><dd>{formatPrice(size.calculationBasisPrice ?? size.referencePrice)}</dd></div>
-        <div><dt>概算仕入れ基準価格</dt><dd>{formatPrice(size.purchaseBenchmark)}</dd></div>
+        <div><dt>中国表示可能価格</dt><dd>{formatPrice(size.chinaDisplayablePrice ?? size.referencePrice)}</dd></div>
+        <div><dt>グローバル最低出品価格（参考）</dt><dd>{formatPrice(size.currentMinimumListingPrice ?? null)}</dd></div>
+        <div><dt>販売アップ推奨価格</dt><dd>{formatPrice(size.recommendedPrice ?? null)}</dd></div>
+        <div><dt>概算収入</dt><dd>{formatPrice(size.estimatedIncome ?? size.estimatedNetProceeds)}</dd></div>
+        <div><dt>自社の仕入れ上限</dt><dd>{formatPrice(size.purchaseBenchmark)}</dd></div>
       </dl>
     </li>
   )
@@ -88,20 +99,48 @@ export function SizeEvaluationDetails({
           <p>{unavailableSizes.map(({ sizes }) => displaySizes(sizes)).join(' / ')}</p>
         </details>
       )}
+      {evaluation.feePolicyExpired && (
+        <p className="market-coverage-warning" role="alert">
+          手数料ポリシーの最終検証から30日を超えています。概算値は表示しますが、仕入れ判断は要確認です。
+        </p>
+      )}
+      {evaluation.feePolicyApplicable === false && (
+        <p className="market-coverage-warning" role="alert">
+          この商品は検証済みスニーカー料金の対象外です。カテゴリー別の運営費を確認できないため、概算収入と仕入れ上限は算出しません。
+        </p>
+      )}
       <p className="estimate-note">
-        POIZON参考価格と30日平均成約価格の低い方を基準に、保存時点の手数料ポリシーから求めた概算です。利益を保証するものではありません。
+        概算収入は中国表示可能価格と保存時点の検証済み手数料ポリシーから求めています。30日平均成約価格は計算に使用しません。POIZON公開APIは収入見込を返さないため、利益や将来の一致を保証するものではありません。
       </p>
     </details>
   )
 }
 
-export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
+export function CandidateCard({
+  entry,
+  onRefresh,
+}: {
+  entry: ScanHistoryEntry
+  onRefresh?: (id: string) => void
+}) {
   const evaluation = getEntryEvaluation(entry)
   if (!evaluation) return null
   const product = entry.poizon?.product
   const marketWarnings = entry.poizon?.market?.warnings ?? []
   const salesPartial = marketWarnings.includes('SALES_PARTIAL')
   const pricePartial = marketWarnings.includes('PRICE_PARTIAL')
+  const previousSnapshot = entry.priceHistory && entry.priceHistory.length > 1
+    ? entry.priceHistory[entry.priceHistory.length - 2]
+    : null
+  const scannedSize = evaluation.sizes.find((size) => size.scanned)
+  const previousScannedSize = scannedSize
+    ? previousSnapshot?.sizes.find((size) => size.skuId === scannedSize.skuId)
+    : undefined
+  const currentDisplayable = scannedSize?.chinaDisplayablePrice ?? scannedSize?.referencePrice ?? null
+  const previousDisplayable = previousScannedSize?.chinaDisplayablePrice ?? null
+  const displayableDifference = currentDisplayable !== null && previousDisplayable !== null
+    ? currentDisplayable - previousDisplayable
+    : null
 
   return (
     <article className="candidate-card">
@@ -121,12 +160,22 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
         </div>
         <div className="candidate-heading-aside">
           <span className="candidate-badge">候補</span>
+          {onRefresh && (
+            <button
+              type="button"
+              className="text-button"
+              disabled={entry.lookupStatus === 'pending'}
+              onClick={() => onRefresh(entry.id)}
+            >
+              {entry.lookupStatus === 'pending' ? '更新中…' : '価格を更新'}
+            </button>
+          )}
         </div>
       </div>
       {(salesPartial || pricePartial) && (
         <div className="market-coverage-warning" role="status">
           {salesPartial && <p>一部サイズの販売数が未取得です。合計は取得済み範囲です。</p>}
-          {pricePartial && <p>一部サイズのPOIZON参考価格が未取得です。</p>}
+          {pricePartial && <p>一部サイズの中国表示可能価格が未取得です。</p>}
         </div>
       )}
       <div className="candidate-primary-summary">
@@ -136,7 +185,7 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
           <small>{evaluation.sellingSizeCount}/{evaluation.totalSizeCount}サイズで販売実績</small>
         </div>
         <div className="benchmark-summary">
-          <span>仕入れ基準価格・中央値</span>
+          <span>自社の仕入れ上限・中央値</span>
           {evaluation.benchmarkMedian === null ? (
             <strong className="benchmark-unavailable">算出不可</strong>
           ) : (
@@ -147,7 +196,27 @@ export function CandidateCard({ entry }: { entry: ScanHistoryEntry }) {
           )}
         </div>
       </div>
+      {previousSnapshot && (
+        <p className="poizon-as-of">
+          前回の中国表示可能価格: {formatPrice(previousDisplayable)}
+          {displayableDifference !== null
+            ? ` / 差額 ${displayableDifference >= 0 ? '+' : ''}${yenFormatter.format(displayableDifference)}`
+            : ''}
+          {' / '}前回取得: {dateTimeFormatter.format(new Date(previousSnapshot.savedAt))}
+        </p>
+      )}
       <SizeEvaluationDetails evaluation={evaluation} warnings={marketWarnings} />
+      {entry.poizon && (
+        <p className="poizon-as-of">
+          価格取得日時: {dateTimeFormatter.format(new Date(
+            entry.poizon.market?.priceDataAsOf ??
+              entry.poizon.price?.dataAsOf ??
+              entry.poizon.market?.marketDataAsOf ??
+              entry.poizon.savedAt,
+          ))}
+          {' / '}照会完了日時: {dateTimeFormatter.format(new Date(entry.poizon.savedAt))}
+        </p>
+      )}
     </article>
   )
 }

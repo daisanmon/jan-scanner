@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPoizonPublicConfigReady, POIZON_PUBLIC_CONFIG } from '../config/publicConfig'
 import { usePoizonLookup } from '../hooks/usePoizonLookup'
 import { hasValidPoizonSession } from '../services/poizonApi'
@@ -9,13 +9,18 @@ import type {
   PoizonSizeMarketData,
 } from '../types/poizon'
 import type { StorablePoizonLookupResponse } from '../types/history'
+import type { ProductLookup } from '../types/history'
+import { lookupLabel, lookupSourceLabel, toPoizonLookupInput } from '../utils/productLookup'
+import type { PoizonLookupContext } from '../../shared/poizon'
 import { ProductImage } from './ProductImage'
 import { TurnstileWidget } from './TurnstileWidget'
 
 export type PoizonLookupTarget = {
-  janCode: string
+  janCode?: string
+  lookup?: ProductLookup
   sequence: number
   historyEntryId?: string
+  selectedSpuId?: string
 }
 
 type PoizonLookupPanelProps = {
@@ -24,7 +29,12 @@ type PoizonLookupPanelProps = {
     target: PoizonLookupTarget,
     response: StorablePoizonLookupResponse,
   ) => void
-  onLookupReview?: (target: PoizonLookupTarget, message: string) => void
+  onLookupReview?: (
+    target: PoizonLookupTarget,
+    message: string,
+    candidates?: PoizonProductCandidate[],
+    lookup?: PoizonLookupContext,
+  ) => void
   onLookupError?: (target: PoizonLookupTarget, message: string) => void
 }
 
@@ -71,6 +81,16 @@ function formatRatio(value: number | null): string {
   return value === null ? '—' : percentFormatter.format(value)
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+})
+
 export function ProductSummary({ product }: { product: PoizonProductCandidate }) {
   return (
     <div className="poizon-product">
@@ -78,12 +98,14 @@ export function ProductSummary({ product }: { product: PoizonProductCandidate })
       <div className="poizon-product-copy">
         <p className="poizon-product-title">{product.title || `SPU ${product.spuId}`}</p>
         {product.brandName && <p className="poizon-brand">{product.brandName}</p>}
-        <p className="poizon-size">JAN照会サイズ: {displaySizes(product.sizes)}</p>
+        <p className="poizon-size">
+          {product.janCode ? `JAN照会サイズ: ${displaySizes(product.sizes)}` : '商品単位照会・全サイズを評価'}
+        </p>
       </div>
       <dl className="poizon-identifiers">
         <div><dt>spuId</dt><dd>{product.spuId}</dd></div>
-        <div><dt>skuId</dt><dd>{product.skuId}</dd></div>
-        <div><dt>globalSkuId</dt><dd>{product.globalSkuId}</dd></div>
+        {product.skuId && <div><dt>skuId</dt><dd>{product.skuId}</dd></div>}
+        {product.globalSkuId && <div><dt>globalSkuId</dt><dd>{product.globalSkuId}</dd></div>}
       </dl>
     </div>
   )
@@ -123,8 +145,12 @@ function SizeMarketRow({ size }: { size: PoizonSizeMarketData }) {
       </div>
       <dl className="poizon-size-metrics">
         <div>
-          <dt>仕入れ基準価格</dt>
+          <dt>中国表示可能価格</dt>
           <dd>{formatPrice(size.asiaMinPrice)}</dd>
+        </div>
+        <div>
+          <dt>販売アップ推奨価格</dt>
+          <dd>{formatPrice(size.moreReferencePrice ?? null)}</dd>
         </div>
         <div>
           <dt>30日販売数</dt>
@@ -167,14 +193,14 @@ export function MarketView({ market }: { market: PoizonMarketData }) {
           </small>
         </div>
         <div>
-          <span>仕入れ基準価格・中央値</span>
+          <span>中国表示可能価格・中央値</span>
           <strong>{formatPrice(summary.referencePrice.median)}</strong>
           <small>{summary.referencePrice.reportedSizeCount}/{summary.referencePrice.totalSizeCount}サイズ</small>
         </div>
       </div>
 
       <RangeMetric
-        label="仕入れ基準価格"
+        label="中国表示可能価格"
         min={summary.referencePrice.min}
         median={summary.referencePrice.median}
         max={summary.referencePrice.max}
@@ -219,7 +245,7 @@ export function MarketView({ market }: { market: PoizonMarketData }) {
       </details>
 
       <p className="poizon-as-of">
-        取得時刻: {new Date(timestamp).toLocaleString('ja-JP')}
+        価格取得日時: {dateTimeFormatter.format(new Date(timestamp))}
       </p>
     </div>
   )
@@ -240,7 +266,7 @@ export function LegacyPriceView({
         <div><span>アジア参考価格</span><strong>{yenFormatter.format(price.asiaMinPrice)}</strong></div>
       </div>
       <p className="poizon-as-of">
-        取得時刻: {new Date(price.dataAsOf).toLocaleString('ja-JP')}
+        価格取得日時: {dateTimeFormatter.format(new Date(price.dataAsOf))}
       </p>
     </>
   )
@@ -293,6 +319,10 @@ export function PoizonLookupPanel({
   const handledSequenceRef = useRef<number | null>(null)
   const reportedErrorSequenceRef = useRef<number | null>(null)
   const configured = isPoizonPublicConfigReady()
+  const lookupTarget: ProductLookup | null = useMemo(
+    () => target?.lookup ?? (target?.janCode ? { kind: 'jan', janCode: target.janCode } : null),
+    [target],
+  )
 
   const renewChallenge = useCallback(() => {
     setToken(null)
@@ -303,14 +333,14 @@ export function PoizonLookupPanel({
 
   const runLookup = useCallback(
     async (selectedSpuId?: string) => {
-      if (!target || (!token && !sessionAvailable)) {
+      if (!target || !lookupTarget || (!token && !sessionAvailable)) {
         return
       }
       const currentToken = token
       setToken(null)
       const response = await lookup({
-        janCode: target.janCode,
-        selectedSpuId,
+        ...toPoizonLookupInput(lookupTarget),
+        selectedSpuId: selectedSpuId ?? target.selectedSpuId,
         turnstileToken: currentToken ?? undefined,
       })
       const hasSession = hasValidPoizonSession()
@@ -319,7 +349,12 @@ export function PoizonLookupPanel({
         onLookupComplete?.(target, response)
       }
       if (response?.state === 'selection_required') {
-        onLookupReview?.(target, '複数の商品候補が見つかりました。')
+        onLookupReview?.(
+          target,
+          '複数の商品候補が見つかりました。',
+          response.candidates,
+          response.lookup,
+        )
       }
       if (!response && !hasSession) {
         renewChallenge()
@@ -329,6 +364,7 @@ export function PoizonLookupPanel({
     },
     [
       lookup,
+      lookupTarget,
       onLookupComplete,
       onLookupReview,
       renewChallenge,
@@ -346,7 +382,7 @@ export function PoizonLookupPanel({
       handledSequenceRef.current !== target.sequence
     ) {
       handledSequenceRef.current = target.sequence
-      void runLookup()
+      void runLookup(target.selectedSpuId)
     }
   }, [configured, runLookup, sessionAvailable, target, token])
 
@@ -374,7 +410,7 @@ export function PoizonLookupPanel({
       </p>
     )
   } else if (!target) {
-    content = <p className="poizon-message">JANコードを読み取ると商品と市場データを照会します。</p>
+    content = <p className="poizon-message">JANまたはAlpen QRを読み取ると商品と市場データを照会します。</p>
   } else if (state.status === 'idle') {
     content = <p className="poizon-message">商品・市場データの照会を開始します…</p>
   } else if (state.status === 'loading') {
@@ -436,7 +472,7 @@ export function PoizonLookupPanel({
           <h2 id="poizon-heading">商品・市場データ</h2>
         </div>
       </div>
-      {target && <p className="poizon-jan">JAN {target.janCode}</p>}
+      {lookupTarget && <p className="poizon-jan">{lookupSourceLabel(lookupTarget)} {lookupLabel(lookupTarget)}</p>}
       {content}
       {configured && target && !sessionAvailable && (
         <div className="poizon-challenge">

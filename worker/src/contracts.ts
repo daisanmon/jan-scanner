@@ -1,16 +1,25 @@
-import type { PoizonApiErrorResponse } from '../../shared/poizon'
+import type { PoizonApiErrorResponse, PoizonLookupContext } from '../../shared/poizon'
 import { ApiError } from './errors'
 
 export type LookupRequest = {
-  janCode: string
+  janCode?: string
+  articleNumber?: string
+  brandName?: string
+  alpenProductId?: string
+  alpenUrl?: string
   selectedSpuId?: string
   /** Accepted during the frontend/worker rollout for backwards compatibility. */
   selectedSkuId?: string
   turnstileToken?: string
 }
 
-export type GatewayLookupRequest = Omit<LookupRequest, 'turnstileToken'> & {
+export type GatewayLookupRequest = {
   requestId: string
+  lookup?: PoizonLookupContext
+  /** Accepted for existing Durable Object requests during rollout. */
+  janCode?: string
+  selectedSpuId?: string
+  selectedSkuId?: string
 }
 
 export function jsonResponse(value: unknown, status = 200, headers?: HeadersInit): Response {

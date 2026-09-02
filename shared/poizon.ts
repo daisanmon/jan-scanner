@@ -16,6 +16,19 @@ export type PoizonProductCandidate = {
   sizes: PoizonSize[]
 }
 
+export type PoizonLookupContext =
+  | {
+      kind: 'jan'
+      janCode: string
+    }
+  | {
+      kind: 'article'
+      articleNumber: string
+      brandName?: string
+      alpenProductId?: string
+      alpenUrl?: string
+    }
+
 export type PoizonSizeMarketData = {
   skuId: string
   globalSkuId: string
@@ -28,6 +41,10 @@ export type PoizonSizeMarketData = {
   averageTransactionPrice: number | null
   globalMinPrice: number | null
   asiaMinPrice: number | null
+  localMinPrice?: number | null
+  highDemandPrice?: number | null
+  fen95ReferencePrice?: number | null
+  moreReferencePrice?: number | null
 }
 
 export type PoizonNumberRange = {
@@ -68,6 +85,7 @@ export type PoizonCacheStatus = {
 
 export type PoizonResolvedResponse = {
   requestId: string
+  lookup?: PoizonLookupContext
   state: 'resolved'
   product: PoizonProductCandidate
   /** Omitted only when API 169 fails and the single-size API 93 fallback succeeds. */
@@ -84,6 +102,7 @@ export type PoizonResolvedResponse = {
 
 export type PoizonSelectionRequiredResponse = {
   requestId: string
+  lookup?: PoizonLookupContext
   state: 'selection_required'
   candidates: PoizonProductCandidate[]
   cache: PoizonCacheStatus
@@ -91,12 +110,14 @@ export type PoizonSelectionRequiredResponse = {
 
 export type PoizonNotFoundResponse = {
   requestId: string
+  lookup?: PoizonLookupContext
   state: 'not_found'
   cache: PoizonCacheStatus
 }
 
 export type PoizonPriceUnavailableResponse = {
   requestId: string
+  lookup?: PoizonLookupContext
   state: 'price_unavailable'
   product: PoizonProductCandidate
   market?: PoizonMarketData
@@ -112,6 +133,8 @@ export type PoizonLookupResponse =
 export type PoizonApiErrorCode =
   | 'INVALID_REQUEST'
   | 'INVALID_JAN'
+  | 'INVALID_ARTICLE'
+  | 'INVALID_ALPEN_PRODUCT'
   | 'INVALID_SELECTION'
   | 'SELECTION_STALE'
   | 'ORIGIN_NOT_ALLOWED'

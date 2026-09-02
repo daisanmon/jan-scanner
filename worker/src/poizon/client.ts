@@ -2,6 +2,7 @@ import type { WorkerEnv } from '../env'
 import { PoizonUpstreamError } from '../errors'
 import {
   normalizeBarcodeCandidates,
+  normalizeArticleCandidates,
   normalizeBatchPrices,
   normalizeMarketProduct,
   normalizePrice,
@@ -11,6 +12,7 @@ import { signPoizonRequest, type SignableParameters } from './signature'
 
 const POIZON_ORIGIN = 'https://open.poizon.com'
 const API_181_PATH = '/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-barcodes'
+const API_226_PATH = '/dop/api/v1/pop/api/v1/intl-commodity/intl/spu/spu-basic-info/by-article-number'
 const API_169_PATH = '/dop/api/v1/pop/api/v1/intl-commodity/intl/sku/sku-basic-info/by-spu'
 const API_93_PATH = '/dop/api/v1/pop/api/v1/recommend-bid/price'
 const API_141_PATH = '/dop/api/v1/pop/api/v1/recommend-bid/batchPrice'
@@ -39,7 +41,7 @@ function retryDelay(): Promise<void> {
 }
 
 async function requestPoizon(
-  apiId: 181 | 169 | 93 | 141,
+  apiId: 181 | 226 | 169 | 93 | 141,
   path: string,
   businessParameters: SignableParameters,
   env: WorkerEnv,
@@ -203,6 +205,33 @@ export async function queryProductsByBarcode(
   }
 }
 
+export async function queryProductsByArticleNumber(
+  articleNumber: string,
+  env: WorkerEnv,
+  reserveQuota: QuotaReservation,
+  fetcher: Fetcher = fetch,
+) {
+  const response = await requestPoizon(
+    226,
+    API_226_PATH,
+    {
+      articleNumber,
+      region: env.POIZON_REGION,
+      pageNum: 1,
+      pageSize: 100,
+    },
+    env,
+    reserveQuota,
+    fetcher,
+  )
+  try {
+    return normalizeArticleCandidates(response)
+  } catch {
+    const envelope = readPoizonEnvelope(response)
+    throw new PoizonUpstreamError('bad_response', 226, 200, envelope.code, envelope.traceId)
+  }
+}
+
 export async function queryConsignmentPrice(
   skuId: string,
   env: WorkerEnv,
@@ -232,6 +261,7 @@ export async function queryConsignmentPrice(
 
 export const POIZON_API_PATHS = {
   181: API_181_PATH,
+  226: API_226_PATH,
   169: API_169_PATH,
   93: API_93_PATH,
   141: API_141_PATH,

@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PoizonNotFoundResponse, PoizonResolvedResponse } from '../types/poizon'
 import { DEFAULT_SOURCING_SETTINGS } from '../utils/sourcingEvaluation'
+import { createPoizonHistorySnapshot } from '../utils/poizonHistory'
 import { useJanHistory } from './useJanHistory'
 
 const STORAGE_KEY = 'jan-pocket:scan-history'
@@ -70,7 +71,7 @@ afterEach(() => {
 })
 
 describe('useJanHistory', () => {
-  it('loads v1 entries and rewrites them as schema v3 without data loss', async () => {
+  it('loads v1 entries and rewrites them as schema v5 without data loss', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -93,11 +94,11 @@ describe('useJanHistory', () => {
       const stored = JSON.parse(String(localStorage.getItem(STORAGE_KEY))) as {
         schemaVersion: number
       }
-      expect(stored.schemaVersion).toBe(3)
+      expect(stored.schemaVersion).toBe(5)
     })
   })
 
-  it('loads v2 entries and aggregates repeated JAN scans in v3', () => {
+  it('loads v2 entries and aggregates repeated JAN scans in v5', () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -122,6 +123,32 @@ describe('useJanHistory', () => {
     expect(registration).toMatchObject({ id: 'v2-entry', shouldLookup: true })
     expect(result.current.history).toHaveLength(1)
     expect(result.current.history[0].aggregation?.scanCount).toBe(2)
+  })
+
+  it('migrates a v3 POIZON result into the first lightweight price history', () => {
+    const poizon = createPoizonHistorySnapshot(
+      resolvedResponse,
+      new Date('2026-08-05T00:01:00.000Z'),
+    )
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      schemaVersion: 3,
+      history: [{
+        id: 'v3-entry',
+        janCode: '4580563378953',
+        readAt: '2026-08-05T00:00:00.000Z',
+        method: 'camera',
+        poizon,
+        sourcing: poizon.sourcing,
+        lookupStatus: 'complete',
+      }],
+    }))
+
+    const { result } = renderHook(() => useJanHistory())
+    expect(result.current.history[0].priceHistory).toHaveLength(1)
+    expect(result.current.history[0].priceHistory?.[0].sizes[0]).toMatchObject({
+      skuId: '600297001',
+      chinaDisplayablePrice: 20_000,
+    })
   })
 
   it('attaches the completed POIZON result to the matching scan', () => {
@@ -184,7 +211,10 @@ describe('useJanHistory', () => {
       entryId = result.current.addEntry('4580563378953', 'camera')
     })
     act(() => {
-      result.current.savePoizonResult(entryId, resolvedResponse)
+      result.current.savePoizonResult(entryId, {
+        ...resolvedResponse,
+        product: { ...resolvedResponse.product, articleNumber: 'TEST-1' },
+      })
     })
     expect(result.current.history[0].sourcing?.benchmarkMedian).toBe(14_300)
 
@@ -198,6 +228,97 @@ describe('useJanHistory', () => {
         minimumProfitRate: 0.25,
         minimumProfitAmount: 1_000,
       })
+    })
+  })
+
+  it('refreshes a completed entry only after the JST date changes', () => {
+    const { result } = renderHook(() => useJanHistory())
+    let entryId = ''
+    act(() => {
+      entryId = result.current.addEntry('4580563378953', 'camera')
+      result.current.savePoizonResult(entryId, {
+        ...resolvedResponse,
+        product: { ...resolvedResponse.product, articleNumber: 'TEST-1' },
+      })
+    })
+
+    let sameDay: ReturnType<typeof result.current.registerScan> | undefined
+    let nextDay: ReturnType<typeof result.current.registerScan> | undefined
+    act(() => {
+      const savedAt = result.current.history[0].poizon?.savedAt ?? ''
+      const saved = new Date(savedAt)
+      sameDay = result.current.registerScan(
+        '4580563378953',
+        'camera',
+        new Date(saved.getTime() + 60_000),
+      )
+      nextDay = result.current.registerScan(
+        '4580563378953',
+        'camera',
+        new Date(saved.getTime() + 24 * 60 * 60 * 1_000),
+      )
+    })
+
+    expect(sameDay?.shouldLookup).toBe(false)
+    expect(nextDay?.shouldLookup).toBe(true)
+  })
+
+  it('keeps the last successful values when refresh fails', () => {
+    const { result } = renderHook(() => useJanHistory())
+    let entryId = ''
+    act(() => {
+      entryId = result.current.addEntry('4580563378953', 'camera')
+      result.current.savePoizonResult(entryId, resolvedResponse)
+      result.current.requestRefresh(entryId)
+      result.current.saveLookupError(entryId, 'temporary failure')
+    })
+
+    expect(result.current.history[0].poizon?.state).toBe('resolved')
+    expect(result.current.history[0].sourcing?.status).toBe('review')
+    expect(result.current.history[0].lookupError).toContain('前回の取得値')
+  })
+
+  it('keeps one price snapshot per JST day and at most 90 days', () => {
+    const { result } = renderHook(() => useJanHistory())
+    let entryId = ''
+    act(() => {
+      entryId = result.current.addEntry('4580563378953', 'camera')
+      for (let day = 0; day < 91; day += 1) {
+        result.current.savePoizonResult(
+          entryId,
+          resolvedResponse,
+          new Date(Date.UTC(2026, 0, 1 + day, 3)),
+        )
+      }
+      result.current.savePoizonResult(
+        entryId,
+        resolvedResponse,
+        new Date(Date.UTC(2026, 3, 1, 5)),
+      )
+    })
+
+    expect(result.current.history[0].priceHistory).toHaveLength(90)
+    expect(result.current.history[0].priceHistory?.at(-1)?.savedAt).toBe(
+      '2026-04-01T05:00:00.000Z',
+    )
+  })
+
+  it('deduplicates Alpen scans by product number independently from JAN history', () => {
+    const { result } = renderHook(() => useJanHistory())
+    act(() => {
+      result.current.registerLookup({ kind: 'alpen', alpenProductId: '4051643735' }, 'camera')
+      result.current.registerLookup({
+        kind: 'alpen',
+        alpenProductId: '4051643735',
+        alpenUrl: 'https://store.alpen-group.jp/Form/Product/ProductDetail.aspx?pid=4051643735-0001',
+      }, 'manual')
+    })
+
+    expect(result.current.history).toHaveLength(1)
+    expect(result.current.history[0].aggregation?.scanCount).toBe(2)
+    expect(result.current.history[0].lookup).toMatchObject({
+      kind: 'alpen',
+      alpenProductId: '4051643735',
     })
   })
 })

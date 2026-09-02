@@ -30,7 +30,7 @@ describe('application layout', () => {
     render(<App />)
 
     fireEvent.click(screen.getByRole('button', { name: '設定' }))
-    fireEvent.change(screen.getByRole('spinbutton', { name: /最低利益率/ }), {
+    fireEvent.change(screen.getByRole('spinbutton', { name: /最低売上利益率/ }), {
       target: { value: '20' },
     })
     fireEvent.change(screen.getByRole('spinbutton', { name: /最低見込み利益/ }), {
