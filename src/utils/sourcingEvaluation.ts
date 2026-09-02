@@ -6,7 +6,10 @@ import type {
 import type { PoizonMarketData, PoizonSizeMarketData } from '../types/poizon'
 
 export const POIZON_FEE_POLICY = {
-  id: 'jp-prestock-shoes-2026-08-23-average-cap',
+  id: 'jp-prestock-shoes-2026-08-28-displayable-price',
+  verifiedAt: '2026-08-28T00:00:00.000+09:00',
+  validUntil: '2026-09-27T23:59:59.999+09:00',
+  scope: '日本の自社Sellerアカウント・中国市場・検証済みスニーカー・現在の出品方式',
   listingFeeRate: 0.05,
   listingFeeMin: 700,
   listingFeeMax: 4_230,
@@ -81,14 +84,15 @@ export function calculateSourcingFees(
 function evaluateSize(
   size: PoizonSizeMarketData,
   settings: SourcingSettings,
+  feePolicyApplicable: boolean,
 ): SizeSourcingEvaluation {
-  const availableSalePrices = [
-    size.asiaMinPrice,
-    size.averageTransactionPrice,
-  ].filter((value): value is number => value !== null && value > 0)
+  const chinaDisplayablePrice = size.asiaMinPrice
+  const recommendedPrice = size.moreReferencePrice ?? null
   const calculationBasisPrice =
-    availableSalePrices.length > 0 ? Math.min(...availableSalePrices) : null
-  const fees = calculationBasisPrice === null
+    chinaDisplayablePrice !== null && chinaDisplayablePrice > 0
+      ? chinaDisplayablePrice
+      : null
+  const fees = calculationBasisPrice === null || !feePolicyApplicable
     ? null
     : calculateSourcingFees(calculationBasisPrice, settings)
 
@@ -99,12 +103,16 @@ function evaluateSize(
     scanned: size.scanned,
     sales30d: size.globalSoldNum30,
     averageTransactionPrice: size.averageTransactionPrice,
-    referencePrice: size.asiaMinPrice,
+    chinaDisplayablePrice,
+    currentMinimumListingPrice: size.globalMinPrice,
+    recommendedPrice,
+    referencePrice: chinaDisplayablePrice,
     calculationBasisPrice,
     listingFee: fees?.listingFee ?? null,
     operationFee: fees?.operationFee ?? null,
     transferFee: fees?.transferFee ?? null,
     estimatedNetProceeds: fees?.estimatedNetProceeds ?? null,
+    estimatedIncome: fees?.estimatedNetProceeds ?? null,
     purchaseBenchmark: fees?.purchaseBenchmark ?? null,
   }
 }
@@ -157,17 +165,30 @@ export function evaluateSourcingMarket(
   market: PoizonMarketData | undefined,
   now = new Date(),
   settings = DEFAULT_SOURCING_SETTINGS,
+  product?: { title?: string; brandName?: string },
 ): SourcingEvaluation {
+  const productText = `${product?.brandName ?? ''} ${product?.title ?? ''}`.toLowerCase()
+  const clearlyOutsideVerifiedScope = [
+    'crocs', 'clog', 'sandal', 'slipper', 'slide', 'boot',
+    'クロッグ', 'サンダル', 'スリッパ', 'ブーツ',
+  ].some((keyword) => productText.includes(keyword))
+  const feePolicyApplicable = !clearlyOutsideVerifiedScope
   const sizes = (market?.sizes ?? [])
-    .map((size) => evaluateSize(size, settings))
+    .map((size) => evaluateSize(size, settings, feePolicyApplicable))
     .sort((left, right) => sizeSortValue(left) - sizeSortValue(right))
   const benchmarks = aggregateBenchmarks(sizes)
   const knownSales = sizes
     .map(({ sales30d }) => sales30d)
     .filter((sales): sales is number => sales !== null)
 
+  const feePolicyExpired = now.getTime() > Date.parse(POIZON_FEE_POLICY.validUntil)
+  const marketStatus = determineCandidateStatus(market?.sizes ?? null)
+
   return {
-    status: determineCandidateStatus(market?.sizes ?? null),
+    status:
+      (feePolicyExpired || !feePolicyApplicable) && marketStatus === 'candidate'
+        ? 'review'
+        : marketStatus,
     totalSales30d:
       knownSales.length === 0
         ? null
@@ -182,6 +203,10 @@ export function evaluateSourcingMarket(
     benchmarkMax: benchmarks.max,
     sizes,
     feePolicyId: POIZON_FEE_POLICY.id,
+    feePolicyVerifiedAt: POIZON_FEE_POLICY.verifiedAt,
+    feePolicyValidUntil: POIZON_FEE_POLICY.validUntil,
+    feePolicyExpired,
+    feePolicyApplicable,
     minimumProfitRate: settings.minimumProfitRate,
     minimumProfitAmount: settings.minimumProfitAmount,
     evaluatedAt: now.toISOString(),
@@ -204,6 +229,10 @@ export function createEmptySourcingEvaluation(
     benchmarkMax: null,
     sizes: [],
     feePolicyId: POIZON_FEE_POLICY.id,
+    feePolicyVerifiedAt: POIZON_FEE_POLICY.verifiedAt,
+    feePolicyValidUntil: POIZON_FEE_POLICY.validUntil,
+    feePolicyExpired: now.getTime() > Date.parse(POIZON_FEE_POLICY.validUntil),
+    feePolicyApplicable: true,
     minimumProfitRate: settings.minimumProfitRate,
     minimumProfitAmount: settings.minimumProfitAmount,
     evaluatedAt: now.toISOString(),

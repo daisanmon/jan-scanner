@@ -125,7 +125,7 @@ describe('product image placements', () => {
       screen.getByText('一部サイズの販売数が未取得です。合計は取得済み範囲です。'),
     ).toBeInTheDocument()
     expect(
-      screen.getByText('一部サイズのPOIZON参考価格が未取得です。'),
+      screen.getByText('一部サイズの中国表示可能価格が未取得です。'),
     ).toBeInTheDocument()
   })
 

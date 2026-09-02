@@ -133,7 +133,7 @@ describe('sourcing aggregation', () => {
 })
 
 describe('candidate decisions', () => {
-  it('caps the sourcing calculation at the 30-day average transaction price', () => {
+  it('keeps the 30-day average separate from the income calculation', () => {
     const riskySize = size(2, 28_100, true)
     riskySize.averageTransactionPrice = 14_746
 
@@ -142,10 +142,40 @@ describe('candidate decisions', () => {
     expect(result.sizes[0]).toMatchObject({
       referencePrice: 28_100,
       averageTransactionPrice: 14_746,
-      calculationBasisPrice: 14_746,
-      purchaseBenchmark: 10_100,
+      calculationBasisPrice: 28_100,
+      purchaseBenchmark: 20_800,
     })
-    expect(result.feePolicyId).toBe('jp-prestock-shoes-2026-08-23-average-cap')
+    expect(result.feePolicyId).toBe('jp-prestock-shoes-2026-08-28-displayable-price')
+  })
+
+  it.each([
+    [11_400, 8_686],
+    [10_600, 7_894],
+    [11_100, 8_389],
+  ])('matches the verified Seller estimated income for ¥%i', (price, income) => {
+    expect(calculateSourcingFees(price).estimatedNetProceeds).toBe(income)
+  })
+
+  it('marks candidates for review after the fee policy verification expires', () => {
+    const result = evaluateSourcingMarket(
+      market([size(1, 20_000, true)]),
+      new Date('2026-09-28T00:00:00.000+09:00'),
+    )
+    expect(result.status).toBe('review')
+    expect(result.feePolicyExpired).toBe(true)
+  })
+
+  it('does not apply the verified sneaker fee table to clogs or sandals', () => {
+    const result = evaluateSourcingMarket(
+      market([size(1, 5_900, true)]),
+      new Date('2026-08-28T00:00:00.000+09:00'),
+      undefined,
+      { brandName: 'Crocs', title: 'Crush Clog Black' },
+    )
+    expect(result.status).toBe('review')
+    expect(result.feePolicyApplicable).toBe(false)
+    expect(result.sizes[0].estimatedIncome).toBeNull()
+    expect(result.sizes[0].purchaseBenchmark).toBeNull()
   })
 
   it('keeps a product when the scanned or another size has sales', () => {

@@ -61,7 +61,7 @@ export function SourcingSettings({
 
       <div className="settings-fields">
         <label>
-          <span>最低利益率</span>
+          <span>最低売上利益率</span>
           <span className="settings-input-wrap">
             <input
               type="number"

@@ -13,6 +13,7 @@ import {
   queryConsignmentPrice,
   queryMarketBySpu,
   queryProductsByBarcode,
+  queryProductsByArticleNumber,
 } from './client'
 
 const env = {
@@ -112,6 +113,35 @@ describe('POIZON API client', () => {
     await expect(
       queryConsignmentPrice('600297001', env, vi.fn(), fetcher),
     ).resolves.toEqual({ globalMinPrice: 33_900, asiaMinPrice: 33_900 })
+  })
+
+  it('calls API 226 with the documented article-number parameters', async () => {
+    let requestUrl = ''
+    let body: Record<string, unknown> | undefined
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      requestUrl = String(input)
+      body = JSON.parse(String(init?.body)) as Record<string, unknown>
+      return Response.json({
+        code: 200,
+        data: [{ spuId: 1045489, articleNumber: 'MS327CWB', brandName: 'New Balance' }],
+      })
+    }) as typeof fetch
+
+    const candidates = await queryProductsByArticleNumber(
+      'MS327 CWB',
+      env,
+      vi.fn(),
+      fetcher,
+    )
+
+    expect(requestUrl).toContain(POIZON_API_PATHS[226])
+    expect(body).toMatchObject({
+      articleNumber: 'MS327 CWB',
+      region: 'JP',
+      pageNum: 1,
+      pageSize: 100,
+    })
+    expect(candidates[0]).toMatchObject({ spuId: '1045489', articleNumber: 'MS327CWB' })
   })
 
   it('queries both EAN-13 and UPC-A forms when the JAN starts with zero', async () => {

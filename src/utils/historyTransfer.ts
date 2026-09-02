@@ -7,11 +7,16 @@ import type {
 import { isValidJanCode } from './janCode'
 import {
   isPoizonHistorySnapshot,
+  isPriceHistorySnapshot,
   isSourcingEvaluation,
+  createPriceHistorySnapshot,
+  isPoizonProductCandidate,
 } from './poizonHistory'
+import { ALPEN_PRODUCT_ID_PATTERN, normalizeArticleNumber } from '../../shared/alpen'
+import { entryLookup, lookupLabel, lookupSourceLabel } from './productLookup'
 
-export const BACKUP_SCHEMA_VERSION = 3
-const LEGACY_BACKUP_SCHEMA_VERSIONS = [1, 2]
+export const BACKUP_SCHEMA_VERSION = 5
+const LEGACY_BACKUP_SCHEMA_VERSIONS = [1, 2, 3, 4]
 
 export type ParsedHistoryBackup = {
   exportedAt: string
@@ -35,6 +40,26 @@ function isValidDate(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
 }
 
+function isProductLookup(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (value.kind === 'jan') {
+    return typeof value.janCode === 'string' && isValidJanCode(value.janCode)
+  }
+  if (value.kind === 'alpen') {
+    return typeof value.alpenProductId === 'string' &&
+      ALPEN_PRODUCT_ID_PATTERN.test(value.alpenProductId) &&
+      (value.alpenUrl === undefined || typeof value.alpenUrl === 'string') &&
+      (value.articleNumber === undefined || typeof value.articleNumber === 'string') &&
+      (value.brandName === undefined || typeof value.brandName === 'string') &&
+      (value.selectedSpuId === undefined || typeof value.selectedSpuId === 'string')
+  }
+  return value.kind === 'article' &&
+    typeof value.articleNumber === 'string' &&
+    normalizeArticleNumber(value.articleNumber).length > 0 &&
+    (value.brandName === undefined || typeof value.brandName === 'string') &&
+    (value.selectedSpuId === undefined || typeof value.selectedSpuId === 'string')
+}
+
 export function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
   if (!isRecord(value)) {
     return false
@@ -52,16 +77,20 @@ export function isHistoryEntry(value: unknown): value is ScanHistoryEntry {
   return (
     typeof value.id === 'string' &&
     value.id.trim().length > 0 &&
-    typeof value.janCode === 'string' &&
-    isValidJanCode(value.janCode) &&
+    ((typeof value.janCode === 'string' && isValidJanCode(value.janCode)) || isProductLookup(value.lookup)) &&
     isValidDate(value.readAt) &&
     (value.method === 'camera' || value.method === 'manual') &&
     (value.poizon === undefined || isPoizonHistorySnapshot(value.poizon)) &&
+    (value.priceHistory === undefined ||
+      (Array.isArray(value.priceHistory) &&
+        value.priceHistory.every(isPriceHistorySnapshot))) &&
     (value.sourcing === undefined || isSourcingEvaluation(value.sourcing)) &&
     aggregationValid &&
     (value.lookupStatus === undefined ||
       ['pending', 'complete', 'error'].includes(String(value.lookupStatus))) &&
-    (value.lookupError === undefined || typeof value.lookupError === 'string')
+    (value.lookupError === undefined || typeof value.lookupError === 'string') &&
+    (value.selectionCandidates === undefined ||
+      (Array.isArray(value.selectionCandidates) && value.selectionCandidates.every(isPoizonProductCandidate)))
   )
 }
 
@@ -82,11 +111,14 @@ function entriesAreEqual(left: ScanHistoryEntry, right: ScanHistoryEntry) {
   return (
     left.id === right.id &&
     left.janCode === right.janCode &&
+    JSON.stringify(left.lookup) === JSON.stringify(right.lookup) &&
     left.readAt === right.readAt &&
     left.method === right.method &&
     JSON.stringify(left.poizon) === JSON.stringify(right.poizon) &&
+    JSON.stringify(left.priceHistory) === JSON.stringify(right.priceHistory) &&
     JSON.stringify(left.sourcing) === JSON.stringify(right.sourcing) &&
-    JSON.stringify(left.aggregation) === JSON.stringify(right.aggregation)
+    JSON.stringify(left.aggregation) === JSON.stringify(right.aggregation) &&
+    JSON.stringify(left.selectionCandidates) === JSON.stringify(right.selectionCandidates)
   )
 }
 
@@ -134,7 +166,8 @@ export function createJsonBackup(history: ScanHistoryEntry[], now = new Date()) 
 export function createCsvExport(history: ScanHistoryEntry[], now = new Date()) {
   const rows = [
     [
-      'JANコード',
+      '検索元',
+      '検索値',
       '読取日時',
       '登録方法',
       '商品名',
@@ -148,7 +181,8 @@ export function createCsvExport(history: ScanHistoryEntry[], now = new Date()) {
       const summary = entry.poizon?.market?.summary
       const sourcing = entry.sourcing ?? entry.poizon?.sourcing
       return [
-        entry.janCode,
+        lookupSourceLabel(entryLookup(entry)),
+        lookupLabel(entryLookup(entry)),
         entry.readAt,
         methodLabels[entry.method],
         product?.title ?? '',
@@ -244,7 +278,11 @@ export function parseHistoryBackup(text: string): ParsedHistoryBackup {
     throw new HistoryBackupValidationError('履歴データがありません。')
   }
 
-  const history = parsed.history.filter(isHistoryEntry)
+  const history = parsed.history.filter(isHistoryEntry).map((entry) => {
+    if (entry.priceHistory || !entry.poizon) return entry
+    const migrated = createPriceHistorySnapshot(entry.poizon)
+    return migrated ? { ...entry, priceHistory: [migrated] } : entry
+  })
   const failedCount = parsed.history.length - history.length
 
   if (parsed.history.length > 0 && history.length === 0) {

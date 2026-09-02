@@ -185,6 +185,53 @@ export function normalizeBarcodeCandidates(
   return Array.from(candidates.values())
 }
 
+export function normalizeArticleCandidates(
+  response: unknown,
+): PoizonProductCandidate[] {
+  if (!isRecord(response) || Number(response.code) !== 200) {
+    throw new Error('Invalid API 226 response')
+  }
+
+  const rawData = response.data
+  const rows = Array.isArray(rawData)
+    ? rawData
+    : isRecord(rawData)
+      ? [rawData.contents, rawData.records, rawData.list, rawData.data].find(Array.isArray) ?? []
+      : []
+  const candidates = new Map<string, PoizonProductCandidate>()
+
+  for (const raw of rows) {
+    if (!isRecord(raw)) continue
+    const spuInfo = isRecord(raw.spuInfo) ? raw.spuInfo : raw
+    const brandInfo = isRecord(spuInfo.brandInfo) ? spuInfo.brandInfo : {}
+    const spuId = stringId(raw.spuId ?? spuInfo.spuId ?? raw.regionSpuId)
+    if (!spuId) continue
+    const globalSpuId = stringId(raw.globalSpuId ?? spuInfo.globalSpuId)
+    const articleNumber = stringValue(
+      raw.articleNumber ?? spuInfo.articleNumber ?? spuInfo.brandOfficialItemNumber,
+    ).trim()
+    const imageUrl = normalizePoizonImageUrl(
+      raw.logoUrl ?? spuInfo.logoUrl ?? spuInfo.imageUrl,
+    )
+    candidates.set(spuId, {
+      spuId,
+      ...(globalSpuId ? { globalSpuId } : {}),
+      ...(articleNumber ? { articleNumber } : {}),
+      title: stringValue(raw.title ?? spuInfo.title ?? spuInfo.name),
+      brandName: stringValue(
+        raw.brandName ?? spuInfo.brandName ?? brandInfo.brandName ?? brandInfo.name,
+      ),
+      ...(imageUrl ? { imageUrl } : {}),
+      skuId: '',
+      globalSkuId: '',
+      janCode: '',
+      sizes: [],
+    })
+  }
+
+  return Array.from(candidates.values())
+}
+
 export type NormalizedMarketSku = {
   skuId: string
   globalSkuId: string
@@ -300,6 +347,10 @@ export type NormalizedBatchPrice = {
   skuId: string
   globalMinPrice: number | null
   asiaMinPrice: number | null
+  localMinPrice: number | null
+  highDemandPrice: number | null
+  fen95ReferencePrice: number | null
+  moreReferencePrice: number | null
 }
 
 export function normalizeBatchPrices(response: unknown): NormalizedBatchPrice[] {
@@ -320,6 +371,10 @@ export function normalizeBatchPrices(response: unknown): NormalizedBatchPrice[] 
       skuId,
       globalMinPrice: positiveInteger(rawPrice.globalMinPrice),
       asiaMinPrice: positiveInteger(rawPrice.asiaMinPrice),
+      localMinPrice: positiveInteger(rawPrice.localMinPrice),
+      highDemandPrice: positiveInteger(rawPrice.highDemandPrice),
+      fen95ReferencePrice: positiveInteger(rawPrice.fen95ReferencePrice),
+      moreReferencePrice: positiveInteger(rawPrice.moreReferencePrice),
     })
   }
   return Array.from(prices.values())

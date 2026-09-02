@@ -53,7 +53,7 @@ describe('history backup compatibility', () => {
     expect(parsed.failedCount).toBe(0)
   })
 
-  it('exports schema v3 JSON with saved product data', async () => {
+  it('exports schema v4 JSON with saved product data', async () => {
     const backup = createJsonBackup(
       [marketEntry],
       new Date('2026-08-05T00:03:00.000Z'),
@@ -74,6 +74,16 @@ describe('history backup compatibility', () => {
     expect(restored.history[0].poizon?.product?.imageUrl).toBe(
       'https://cdn.poizon.com/pro-img/test-sneaker.jpg',
     )
+  })
+
+  it('accepts schema v3 backups', () => {
+    const parsed = parseHistoryBackup(JSON.stringify({
+      schemaVersion: 3,
+      exportedAt: '2026-08-05T00:02:00.000Z',
+      history: [marketEntry],
+    }))
+    expect(parsed.history[0].poizon?.product?.spuId).toBe('1045489')
+    expect(parsed.failedCount).toBe(0)
   })
 
   it('adds product columns to the CSV export', async () => {

@@ -7,6 +7,7 @@ import {
   marketFixture,
 } from '../../test/poizonFixtures'
 import {
+  normalizeArticleCandidates,
   normalizeBarcodeCandidates,
   normalizeBatchPrices,
   normalizeMarketProduct,
@@ -251,9 +252,34 @@ describe('POIZON response normalization', () => {
 
   it('normalizes an unordered API 141 batch and preserves missing prices', () => {
     expect(normalizeBatchPrices(batchPriceFixture)).toEqual([
-      { skuId: '600297002', globalMinPrice: 35_900, asiaMinPrice: 34_900 },
-      { skuId: '600297001', globalMinPrice: 33_900, asiaMinPrice: 33_900 },
-      { skuId: '600297003', globalMinPrice: 37_900, asiaMinPrice: null },
+      { skuId: '600297002', globalMinPrice: 35_900, asiaMinPrice: 34_900, localMinPrice: null, highDemandPrice: null, fen95ReferencePrice: null, moreReferencePrice: null },
+      { skuId: '600297001', globalMinPrice: 33_900, asiaMinPrice: 33_900, localMinPrice: null, highDemandPrice: null, fen95ReferencePrice: null, moreReferencePrice: null },
+      { skuId: '600297003', globalMinPrice: 37_900, asiaMinPrice: null, localMinPrice: null, highDemandPrice: null, fen95ReferencePrice: null, moreReferencePrice: null },
     ])
+  })
+
+  it('normalizes API 226 article-number candidates without inventing a scanned size', () => {
+    expect(normalizeArticleCandidates({
+      code: 200,
+      data: [{
+        spuId: 1045489,
+        globalSpuId: 10001045489,
+        articleNumber: 'MS327CWB',
+        title: 'New Balance 327 White Black',
+        brandName: 'New Balance',
+        logoUrl: 'https://cdn.poizon.com/pro-img/spu/327.jpg',
+      }],
+    })).toEqual([{
+      spuId: '1045489',
+      globalSpuId: '10001045489',
+      articleNumber: 'MS327CWB',
+      title: 'New Balance 327 White Black',
+      brandName: 'New Balance',
+      imageUrl: 'https://cdn.poizon.com/pro-img/spu/327.jpg',
+      skuId: '',
+      globalSkuId: '',
+      janCode: '',
+      sizes: [],
+    }])
   })
 })

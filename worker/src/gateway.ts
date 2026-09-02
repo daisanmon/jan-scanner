@@ -15,7 +15,10 @@ import {
   queryConsignmentPrice,
   queryMarketBySpu,
   queryProductsByBarcode,
+  queryProductsByArticleNumber,
 } from './poizon/client'
+import { normalizeArticleNumber, normalizeBrandName } from '../../shared/alpen'
+import type { PoizonLookupContext } from '../../shared/poizon'
 import type {
   NormalizedBatchPrice,
   NormalizedMarketProduct,
@@ -147,6 +150,10 @@ function buildMarketData(
         averageTransactionPrice: sku.averageTransactionPrice,
         globalMinPrice: price?.globalMinPrice ?? null,
         asiaMinPrice: price?.asiaMinPrice ?? null,
+        localMinPrice: price?.localMinPrice ?? null,
+        highDemandPrice: price?.highDemandPrice ?? null,
+        fen95ReferencePrice: price?.fen95ReferencePrice ?? null,
+        moreReferencePrice: price?.moreReferencePrice ?? null,
       }
     })
     .sort((left, right) => primarySizeValue(left) - primarySizeValue(right))
@@ -271,11 +278,12 @@ export class PoizonGateway implements DurableObject {
   }
 
   private async lookup(input: GatewayLookupRequest): Promise<PoizonLookupResponse> {
-    const productResult = await this.getProducts(input.janCode, input.requestId)
+    const lookup: PoizonLookupContext = input.lookup ?? { kind: 'jan', janCode: input.janCode ?? '' }
+    const productResult = await this.getProducts(lookup, input.requestId)
     const cache = { product: productResult.cacheHit, market: false, price: false }
 
     if (productResult.candidates.length === 0) {
-      return { requestId: input.requestId, state: 'not_found', cache }
+      return { requestId: input.requestId, lookup, state: 'not_found', cache }
     }
 
     const choices = Array.from(
@@ -292,9 +300,30 @@ export class PoizonGateway implements DurableObject {
       product = productResult.candidates.find(
         (candidate) => candidate.skuId === input.selectedSkuId,
       )
+    } else if (lookup.kind === 'article') {
+      const expectedArticle = normalizeArticleNumber(lookup.articleNumber)
+      const expectedBrand = lookup.brandName
+        ? normalizeBrandName(lookup.brandName)
+        : null
+      const exactChoices = choices.filter((candidate) =>
+        normalizeArticleNumber(candidate.articleNumber ?? '') === expectedArticle &&
+        expectedBrand !== null &&
+        normalizeBrandName(candidate.brandName) === expectedBrand,
+      )
+      if (exactChoices.length === 1) product = exactChoices[0]
+      else {
+        return {
+          requestId: input.requestId,
+          lookup,
+          state: 'selection_required',
+          candidates: choices,
+          cache,
+        }
+      }
     } else if (choices.length > 1) {
       return {
         requestId: input.requestId,
+        lookup,
         state: 'selection_required',
         candidates: choices,
         cache,
@@ -304,15 +333,16 @@ export class PoizonGateway implements DurableObject {
     }
 
     if (!product) {
-      throw new ApiError(
-        409,
-        'SELECTION_STALE',
-        '商品候補が更新されました。JANコードをもう一度照会してください。',
-        true,
-      )
+      return {
+        requestId: input.requestId,
+        lookup,
+        state: 'selection_required',
+        candidates: choices,
+        cache,
+      }
     }
     const candidatesForSelectedSpu = productResult.candidates.filter(
-      (candidate) => candidate.spuId === product.spuId,
+      (candidate) => candidate.spuId === product!.spuId,
     )
     const scannedSkuId =
       candidatesForSelectedSpu.length === 1 ? product.skuId : null
@@ -325,11 +355,21 @@ export class PoizonGateway implements DurableObject {
       if (!(error instanceof PoizonUpstreamError)) {
         throw error
       }
+      if (lookup.kind === 'article' || !product.skuId) {
+        return {
+          requestId: input.requestId,
+          lookup,
+          state: 'price_unavailable',
+          product,
+          cache,
+        }
+      }
       const fallback = await this.getLegacyPrice(product.skuId, input.requestId)
       cache.price = fallback.cacheHit
       if (!fallback.price) {
         return {
           requestId: input.requestId,
+          lookup,
           state: 'price_unavailable',
           product,
           cache,
@@ -337,6 +377,7 @@ export class PoizonGateway implements DurableObject {
       }
       return {
         requestId: input.requestId,
+        lookup,
         state: 'resolved',
         product,
         price: {
@@ -349,6 +390,17 @@ export class PoizonGateway implements DurableObject {
       }
     }
 
+    if (lookup.kind === 'article') {
+      product = {
+        ...product,
+        ...(marketResult.value.market.globalSpuId
+          ? { globalSpuId: marketResult.value.market.globalSpuId }
+          : {}),
+        title: product.title || marketResult.value.market.title,
+        brandName: product.brandName || marketResult.value.market.brandName,
+      }
+    }
+
     const priceResult = await this.getBatchPrices(
       marketResult.value.market.skus.map((sku) => sku.skuId),
       input.requestId,
@@ -356,12 +408,15 @@ export class PoizonGateway implements DurableObject {
     cache.price = priceResult.cacheHit
     let prices = priceResult.prices
     let priceDataAsOf = priceResult.dataAsOf
-    let scannedPrice = prices.find((price) => price.skuId === product.skuId)
+    let scannedPrice = lookup.kind === 'jan'
+      ? prices.find((price) => price.skuId === product.skuId)
+      : prices.find((price) => price.globalMinPrice !== null && price.asiaMinPrice !== null)
 
     if (
+      lookup.kind === 'jan' && (
       !scannedPrice ||
       scannedPrice.globalMinPrice === null ||
-      scannedPrice.asiaMinPrice === null
+      scannedPrice.asiaMinPrice === null)
     ) {
       try {
         const fallback = await this.getLegacyPrice(product.skuId, input.requestId)
@@ -370,6 +425,10 @@ export class PoizonGateway implements DurableObject {
             skuId: product.skuId,
             globalMinPrice: fallback.price.globalMinPrice,
             asiaMinPrice: fallback.price.asiaMinPrice,
+            localMinPrice: null,
+            highDemandPrice: null,
+            fen95ReferencePrice: null,
+            moreReferencePrice: null,
           }
           prices = [
             ...prices.filter((price) => price.skuId !== product.skuId),
@@ -397,6 +456,7 @@ export class PoizonGateway implements DurableObject {
     ) {
       return {
         requestId: input.requestId,
+        lookup,
         state: 'price_unavailable',
         product,
         market,
@@ -406,6 +466,7 @@ export class PoizonGateway implements DurableObject {
 
     return {
       requestId: input.requestId,
+      lookup,
       state: 'resolved',
       product,
       market,
@@ -419,8 +480,11 @@ export class PoizonGateway implements DurableObject {
     }
   }
 
-  private async getProducts(janCode: string, requestId: string) {
-    const cacheKey = `${PRODUCT_CACHE_NAMESPACE}:${janCode}`
+  private async getProducts(lookup: PoizonLookupContext, requestId: string) {
+    const lookupValue = lookup.kind === 'jan'
+      ? lookup.janCode
+      : normalizeArticleNumber(lookup.articleNumber)
+    const cacheKey = `${PRODUCT_CACHE_NAMESPACE}:${lookup.kind}:${lookupValue}`
     const cached = await this.readCache<PoizonProductCandidate[]>(cacheKey)
     if (cached) {
       return { candidates: cached, cacheHit: true }
@@ -432,11 +496,17 @@ export class PoizonGateway implements DurableObject {
     }
 
     const request = (async () => {
-      const candidates = await queryProductsByBarcode(
-        janCode,
-        this.env,
-        () => this.reserveQuota(),
-      )
+      const candidates = lookup.kind === 'jan'
+        ? await queryProductsByBarcode(
+            lookup.janCode,
+            this.env,
+            () => this.reserveQuota(),
+          )
+        : await queryProductsByArticleNumber(
+            lookup.articleNumber,
+            this.env,
+            () => this.reserveQuota(),
+          )
       await this.writeCache(
         cacheKey,
         candidates,
